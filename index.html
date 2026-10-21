@@ -6,12 +6,12 @@
 <meta name="theme-color" content="#101b2a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>ボンバーマン 対 AI v18</title>
+<title>対 AI v18</title>
 <style>
 :root{color-scheme:dark;--bg:#0d1522;--panel:#172639;--edge:#36506a;--text:#f1f8ff;--muted:#9fb6c9;--blue:#39bffa;--red:#ff7777;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif}
 *{box-sizing:border-box}
 html{background:var(--bg);overflow-x:hidden}
-body{margin:0;color:var(--text);background:radial-gradient(ellipse at 40% -20%,#243d5a 0%,var(--bg) 64%);min-height:100svh;padding:env(safe-area-inset-top) max(10px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));overscroll-behavior:contain;-webkit-tap-highlight-color:transparent}
+body{margin:0;color:var(--text);background:radial-gradient(ellipse at 40% -20%,#243d5a 0%,var(--bg) 64%);min-height:100svh;padding:env(safe-area-inset-top) max(10px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));overscroll-behavior:contain;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .shell{max-width:830px;margin:0 auto}
 .header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 3px 10px}
 .brand{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
@@ -28,30 +28,32 @@ canvas{display:block;width:100%;height:100%;aspect-ratio:15/13;user-select:none;
 .legend{display:flex;gap:14px;font-size:11px;color:#adbed0;align-items:center;margin-top:6px}
 .dot{width:9px;height:9px;display:inline-block;border-radius:50%;margin-right:5px;background:var(--blue)}.dot.red{background:var(--red)}
 .control-panel{border:1px solid #334b61;border-radius:14px;padding:14px;background:#142235;box-shadow:0 12px 30px #0003}
-.controls{display:flex;align-items:center;justify-content:space-around;gap:10px;user-select:none;-webkit-user-select:none}
-.dpad{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(3,52px);gap:3px;touch-action:none}
-.dpad button,.bomb{appearance:none;-webkit-appearance:none;font:inherit;color:#eef7ff;border:1px solid #55728c;touch-action:none;user-select:none;-webkit-user-select:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 0 #0a1423;outline-offset:2px}
+.controls{display:flex;align-items:center;justify-content:space-around;gap:10px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
+.dpad{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(3,52px);gap:3px;touch-action:none;-webkit-touch-callout:none}
+.dpad button,.bomb{appearance:none;-webkit-appearance:none;font:inherit;color:#eef7ff;border:1px solid #55728c;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 0 #0a1423;outline-offset:2px}
 .dpad button{border-radius:12px;background:linear-gradient(145deg,#355373,#243c58);font-size:25px;font-weight:900}
 .dpad button:active,.dpad button.pressed{transform:translateY(3px);box-shadow:0 1px 0 #09121c;background:#4879a5}
 .dpad .up{grid-column:2;grid-row:1}.dpad .left{grid-column:1;grid-row:2}.dpad .right{grid-column:3;grid-row:2}.dpad .down{grid-column:2;grid-row:3}
 .dpad .center{grid-column:2;grid-row:2;background:#182f46;border-radius:13px;border:1px solid #2b4864;display:grid;place-items:center;color:#86a3b9;font-size:18px}
+.dpad .up::before{content:"▲"}.dpad .left::before{content:"◀"}.dpad .right::before{content:"▶"}.dpad .down::before{content:"▼"}
+.dpad button::before{pointer-events:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .bomb-wrap{display:grid;justify-items:center;gap:9px;align-items:center}
 .bomb{width:100px;height:100px;border-radius:50%;background:radial-gradient(circle at 30% 25%,#ffbd7c,#f76d40 48%,#b83630 90%);border:3px solid #ffc08f;color:#291419;font-size:20px;font-weight:1000;box-shadow:0 6px 0 #612f25,0 10px 22px #0b1118}
 .bomb.pressed,.bomb:active{transform:translateY(5px);box-shadow:0 1px 0 #612f25;background:#ffa05e}
 .bomb-label{font-size:12px;color:#d7e4ee;font-weight:900}
-.actions{display:flex;gap:9px;align-items:center;margin-top:17px}
-#restart{width:100%;border:1px solid #567fa3;border-radius:10px;background:#24517a;padding:12px 9px;font:inherit;font-size:14px;font-weight:800;color:white;cursor:pointer}
+.actions{display:flex;justify-content:flex-end;align-items:center;margin:0 0 28px;min-height:38px}
+#restart{width:auto;min-width:132px;border:1px solid #567fa3;border-radius:10px;background:#24517a;padding:10px 15px;font:inherit;font-size:13px;font-weight:800;color:white;cursor:pointer;touch-action:manipulation;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 #restart:active{background:#3b6e97}
 .hint{color:#93aabd;font-size:11px;line-height:1.6;margin:11px 0 0}
-@media(max-width:710px){.shell{max-width:475px}.game-layout{grid-template-columns:minmax(0,1fr);gap:10px}.control-panel{border:0;background:transparent;box-shadow:none;padding:0 8px}.header{padding:7px 2px 9px}.controls{justify-content:space-between;gap:12px;max-width:370px;margin:0 auto}.dpad{grid-template-columns:repeat(3,min(16vw,58px));grid-template-rows:repeat(3,min(13.6vw,50px))}.bomb{width:min(25vw,100px);height:min(25vw,100px)}.actions{max-width:370px;margin:12px auto 0}.hint{margin:7px auto 0;max-width:370px}#message{margin-top:8px}}
+@media(max-width:710px){.shell{max-width:475px}.game-layout{grid-template-columns:minmax(0,1fr);gap:10px}.control-panel{border:0;background:transparent;box-shadow:none;padding:0 8px}.header{padding:7px 2px 9px}.controls{justify-content:space-between;gap:12px;max-width:370px;margin:0 auto}.dpad{grid-template-columns:repeat(3,min(16vw,58px));grid-template-rows:repeat(3,min(13.6vw,50px))}.bomb{width:min(25vw,100px);height:min(25vw,100px)}.actions{max-width:370px;margin:0 auto 22px}.hint{margin:7px auto 0;max-width:370px}#message{margin-top:8px}}
 @media(max-width:390px){.dpad{grid-template-columns:repeat(3,50px);grid-template-rows:repeat(3,45px)}.bomb{width:89px;height:89px}.control-panel{padding:0 3px}.legend{margin-top:3px}#message{margin-top:6px}}
-@media(orientation:landscape) and (max-height:520px){body{padding-top:max(3px,env(safe-area-inset-top));padding-bottom:max(3px,env(safe-area-inset-bottom))}.shell{max-width:960px}.header{padding:4px 2px 7px}.game-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(200px,260px);gap:12px}.board{max-height:calc(100svh - 82px);width:auto;max-width:100%;margin:0 auto}.arena{display:flex;flex-direction:column;align-items:center}#message{min-height:0;margin:5px 0 0}.legend{display:none}.control-panel{align-self:center}.controls{gap:8px}.dpad{grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,42px)}.bomb{width:75px;height:75px;font-size:16px}.bomb-label{font-size:10px}.actions{margin:8px auto 0}#restart{padding:8px}.hint{margin:4px 0 0}}
+@media(orientation:landscape) and (max-height:520px){body{padding-top:max(3px,env(safe-area-inset-top));padding-bottom:max(3px,env(safe-area-inset-bottom))}.shell{max-width:960px}.header{padding:4px 2px 7px}.game-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(200px,260px);gap:12px}.board{max-height:calc(100svh - 82px);width:auto;max-width:100%;margin:0 auto}.arena{display:flex;flex-direction:column;align-items:center}#message{min-height:0;margin:5px 0 0}.legend{display:none}.control-panel{align-self:center}.controls{gap:8px}.dpad{grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,42px)}.bomb{width:75px;height:75px;font-size:16px}.bomb-label{font-size:10px}.actions{margin:0 auto 13px}#restart{padding:8px 12px}.hint{margin:4px 0 0}}
 @media(max-height:680px) and (orientation:portrait){.hint{display:none}.legend{margin-top:3px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 </style>
 </head>
 <body><main class="shell">
-<div class="header"><div class="brand"><h1>ボンバーマン</h1><span class="version">VS AI v18</span></div><div class="time" id="match-stats" aria-label="経過時間">00:00</div></div>
+<div class="header"><div class="brand"><span class="version">VS AI v18</span></div><div class="time" id="match-stats" aria-label="経過時間">00:00</div></div>
 <div class="game-layout">
   <div class="arena">
     <div class="board"><canvas id="game" width="480" height="416" aria-label="対戦フィールド。青があなた、赤がAI v18です"></canvas><div id="result-mark" hidden aria-hidden="true"></div></div>
@@ -59,17 +61,17 @@ canvas{display:block;width:100%;height:100%;aspect-ratio:15/13;user-select:none;
     <div class="legend"><span><i class="dot"></i>青：あなた</span><span><i class="dot red"></i>赤：AI v18</span></div>
   </div>
   <div class="control-panel">
+    <div class="actions"><button id="restart" type="button">↻ もう一度対戦</button></div>
     <div class="controls" aria-label="タッチ操作">
       <div class="dpad" aria-label="移動">
-        <button type="button" class="up" data-move="arrowup" aria-label="上へ移動">▲</button>
-        <button type="button" class="left" data-move="arrowleft" aria-label="左へ移動">◀</button>
+        <button type="button" class="up" data-move="arrowup" aria-label="上へ移動"></button>
+        <button type="button" class="left" data-move="arrowleft" aria-label="左へ移動"></button>
         <div class="center" aria-hidden="true">✣</div>
-        <button type="button" class="right" data-move="arrowright" aria-label="右へ移動">▶</button>
-        <button type="button" class="down" data-move="arrowdown" aria-label="下へ移動">▼</button>
+        <button type="button" class="right" data-move="arrowright" aria-label="右へ移動"></button>
+        <button type="button" class="down" data-move="arrowdown" aria-label="下へ移動"></button>
       </div>
       <div class="bomb-wrap"><button type="button" class="bomb" id="bomb-control" aria-label="爆弾を置く">BOMB</button><div class="bomb-label">爆弾を置く</div></div>
     </div>
-    <div class="actions"><button id="restart" type="button">↻ もう一度対戦</button></div>
     <p class="hint">十字キーは長押しで連続移動。移動と爆弾は同時押し可能。PCでは矢印キー／WASD・Spaceでも操作できます。</p>
   </div>
 </div>
@@ -4570,6 +4572,20 @@ function updateMatchStatus() {
 }
 setInterval(updateMatchStatus, 1000);
 
+// Block Safari text selection, long-press callouts, and image/element dragging
+// over the actual game controls (without blocking normal browser behavior elsewhere).
+for (const eventName of ["contextmenu", "selectstart", "dragstart"]) {
+  document.addEventListener(eventName, event => {
+    if (event.target?.closest?.(".dpad, #bomb-control")) event.preventDefault();
+  }, {capture:true});
+}
+const gameTouchControls = document.querySelectorAll("[data-move], #bomb-control");
+for (const control of gameTouchControls) {
+  for (const name of ["contextmenu", "selectstart", "dragstart"])
+    control.addEventListener(name, event => event.preventDefault());
+  control.addEventListener("touchstart", event => event.preventDefault(), {passive:false});
+}
+
 // Pointer controls: each touch/pointer has its own direction. Pointer capture
 // prevents an interrupted finger release from leaving a direction held.
 const touchDirections = new Map();
@@ -4607,7 +4623,6 @@ for (const btn of document.querySelectorAll("[data-move]")) {
   btn.addEventListener("pointerup", end);
   btn.addEventListener("pointercancel", end);
   btn.addEventListener("lostpointercapture", end);
-  btn.addEventListener("contextmenu", event => event.preventDefault());
 }
 const bombBtn = document.getElementById("bomb-control");
 if (bombBtn) {
@@ -4620,7 +4635,6 @@ if (bombBtn) {
   });
   for (const name of ["pointerup","pointercancel","lostpointercapture"])
     bombBtn.addEventListener(name, () => bombBtn.classList.remove("pressed"));
-  bombBtn.addEventListener("contextmenu", event => event.preventDefault());
 }
 window.addEventListener("blur", () => {
   touchDirections.clear();
