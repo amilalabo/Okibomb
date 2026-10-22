@@ -31,7 +31,14 @@ canvas{display:block;width:100%;height:100%;aspect-ratio:15/13;user-select:none;
 .controls{display:flex;align-items:center;justify-content:space-around;gap:10px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
 /* Thumb-operated virtual analog stick: the knob follows the finger;
    the original grid game still receives four-way directions. */
-.stick-wrap{display:grid;justify-items:center;align-items:center;gap:8px}
+.stick-wrap{display:grid;justify-items:center;align-items:center;gap:8px;min-width:0}
+.float-zone{position:relative;width:190px;height:172px;border-radius:20px;background:#14283b55;border:1px dashed #6185a077;touch-action:none;overscroll-behavior:contain;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;overflow:visible;cursor:crosshair}
+.float-zone::after{content:"ここに親指を置く";position:absolute;inset:0;display:grid;place-items:center;color:#a6c2d8;font-size:12px;pointer-events:none;opacity:.85}
+.float-zone.active::after{opacity:0}
+.float-zone .joystick{position:absolute;left:0;top:0;width:112px;height:112px;opacity:0;pointer-events:none;transform:translate(-50%,-50%);transition:opacity .09s ease}
+.float-zone.active .joystick{opacity:1}
+.float-zone .stick-knob{width:44%;height:44%}
+.float-zone .stick-knob::before{inset:32%}
 .joystick{position:relative;width:162px;height:162px;flex:none;border-radius:50%;border:2px solid #587d9b;background:radial-gradient(circle at 44% 36%,#324d69 0%,#1d324a 57%,#0e1c2d 100%);box-shadow:inset 0 5px 18px #050b17b0,0 5px 15px #0006;touch-action:none;overscroll-behavior:contain;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;cursor:grab}
 .joystick.active{border-color:#6baee0;cursor:grabbing}
 .joystick::before{content:"";position:absolute;inset:22%;border:1px solid #4f749250;border-radius:50%;pointer-events:none}
@@ -51,9 +58,9 @@ canvas{display:block;width:100%;height:100%;aspect-ratio:15/13;user-select:none;
 #restart{width:auto;min-width:132px;border:1px solid #567fa3;border-radius:10px;background:#24517a;padding:10px 15px;font:inherit;font-size:13px;font-weight:800;color:white;cursor:pointer;touch-action:manipulation;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 #restart:active{background:#3b6e97}
 .hint{color:#93aabd;font-size:11px;line-height:1.6;margin:11px 0 0}
-@media(max-width:710px){.shell{max-width:475px}.game-layout{grid-template-columns:minmax(0,1fr);gap:10px}.control-panel{border:0;background:transparent;box-shadow:none;padding:0 8px}.header{padding:7px 2px 9px}.controls{justify-content:space-between;gap:12px;max-width:370px;margin:0 auto}.joystick{width:min(42vw,162px);height:min(42vw,162px)}.stick-knob{width:44%;height:44%}.stick-knob::before{inset:32%}.bomb{width:min(25vw,100px);height:min(25vw,100px)}.actions{max-width:370px;margin:0 auto 22px}.hint{margin:7px auto 0;max-width:370px}#message{margin-top:8px}}
-@media(max-width:390px){.joystick{width:148px;height:148px}.bomb{width:89px;height:89px}.control-panel{padding:0 3px}.legend{margin-top:3px}#message{margin-top:6px}}
-@media(orientation:landscape) and (max-height:520px){body{padding-top:max(3px,env(safe-area-inset-top));padding-bottom:max(3px,env(safe-area-inset-bottom))}.shell{max-width:960px}.header{padding:4px 2px 7px}.game-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(200px,260px);gap:12px}.board{max-height:calc(100svh - 82px);width:auto;max-width:100%;margin:0 auto}.arena{display:flex;flex-direction:column;align-items:center}#message{min-height:0;margin:5px 0 0}.legend{display:none}.control-panel{align-self:center}.controls{gap:8px}.joystick{width:134px;height:134px}.stick-wrap{gap:4px}.stick-label{font-size:10px}.bomb{width:75px;height:75px;font-size:16px}.bomb-label{font-size:10px}.actions{margin:0 auto 13px}#restart{padding:8px 12px}.hint{margin:4px 0 0}}
+@media(max-width:710px){.shell{max-width:475px}.game-layout{grid-template-columns:minmax(0,1fr);gap:10px}.control-panel{border:0;background:transparent;box-shadow:none;padding:0 8px}.header{padding:7px 2px 9px}.controls{justify-content:space-between;gap:12px;max-width:370px;margin:0 auto}.float-zone{width:min(47vw,190px);height:164px}.float-zone .joystick{width:112px;height:112px}.stick-knob{width:44%;height:44%}.stick-knob::before{inset:32%}.bomb{width:min(25vw,100px);height:min(25vw,100px)}.actions{max-width:370px;margin:0 auto 22px}.hint{margin:7px auto 0;max-width:370px}#message{margin-top:8px}}
+@media(max-width:390px){.float-zone{width:158px;height:160px}.bomb{width:89px;height:89px}.control-panel{padding:0 3px}.legend{margin-top:3px}#message{margin-top:6px}}
+@media(orientation:landscape) and (max-height:520px){body{padding-top:max(3px,env(safe-area-inset-top));padding-bottom:max(3px,env(safe-area-inset-bottom))}.shell{max-width:960px}.header{padding:4px 2px 7px}.game-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(200px,260px);gap:12px}.board{max-height:calc(100svh - 82px);width:auto;max-width:100%;margin:0 auto}.arena{display:flex;flex-direction:column;align-items:center}#message{min-height:0;margin:5px 0 0}.legend{display:none}.control-panel{align-self:center}.controls{gap:8px}.float-zone{width:154px;height:138px}.float-zone .joystick{width:104px;height:104px}.stick-wrap{gap:4px}.stick-label{font-size:10px}.bomb{width:75px;height:75px;font-size:16px}.bomb-label{font-size:10px}.actions{margin:0 auto 13px}#restart{padding:8px 12px}.hint{margin:4px 0 0}}
 @media(max-height:680px) and (orientation:portrait){.hint{display:none}.legend{margin-top:3px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 </style>
@@ -70,16 +77,16 @@ canvas{display:block;width:100%;height:100%;aspect-ratio:15/13;user-select:none;
     <div class="actions"><button id="restart" type="button">↻ もう一度対戦</button></div>
     <div class="controls" aria-label="タッチ操作">
       <div class="stick-wrap">
-        <div class="joystick" id="move-stick" role="group" aria-label="移動スティック。指を置いて上下左右へ倒すと移動します">
+        <div class="float-zone" id="move-zone" role="group" aria-label="左の領域に指を置くとスティックが現れ、上下左右へ動かせます"><div class="joystick" id="move-stick" aria-hidden="true">
           <span class="mark mark-up" aria-hidden="true">▲</span><span class="mark mark-left" aria-hidden="true">◀</span>
           <span class="mark mark-right" aria-hidden="true">▶</span><span class="mark mark-down" aria-hidden="true">▼</span>
           <div class="stick-knob" id="stick-knob" aria-hidden="true"></div>
         </div>
-        <div class="stick-label">移動スティック</div>
+        </div><div class="stick-label">フローティングスティック</div>
       </div>
       <div class="bomb-wrap"><button type="button" class="bomb" id="bomb-control" aria-label="爆弾を置く">BOMB</button><div class="bomb-label">爆弾を置く</div></div>
     </div>
-    <p class="hint">左スティックを指で倒して移動。中央に戻すと停止。爆弾ボタンと同時操作できます。PCは矢印キー／WASD・Space。</p>
+    <p class="hint">左の操作エリアの好きな場所に親指を置いて倒すと移動。指を離すと停止。爆弾ボタンと同時操作できます。PCは矢印キー／WASD・Space。</p>
   </div>
 </div>
 </main>
@@ -284,7 +291,7 @@ function resetGame() {
   gamepadKeys.clear();
   joystickDirection = null;
   joystickPointerId = null;
-  const stickEl = document.getElementById("move-stick");
+  const stickEl = document.getElementById("move-zone");
   const stickKnob = document.getElementById("stick-knob");
   if (stickEl) stickEl.classList.remove("active");
   if (stickKnob) stickKnob.style.transform = "translate(-50%, -50%)";
@@ -5060,10 +5067,10 @@ setInterval(updateMatchStatus, 1000);
 // Disable Safari's long-press text-selection and callout actions on controls.
 for (const eventName of ["contextmenu", "selectstart", "dragstart"]) {
   document.addEventListener(eventName, event => {
-    if (event.target?.closest?.("#move-stick, #bomb-control")) event.preventDefault();
+    if (event.target?.closest?.("#move-zone, #bomb-control")) event.preventDefault();
   }, {capture:true});
 }
-for (const control of document.querySelectorAll("#move-stick, #bomb-control")) {
+for (const control of document.querySelectorAll("#move-zone, #bomb-control")) {
   control.addEventListener("touchstart", event => event.preventDefault(), {passive:false});
   control.addEventListener("touchmove", event => event.preventDefault(), {passive:false});
 }
@@ -5074,6 +5081,8 @@ const mobileSteps = {
   arrowup: [0,-1], arrowdown: [0,1], arrowleft: [-1,0], arrowright: [1,0]
 };
 const stick = document.getElementById("move-stick");
+const stickZone = document.getElementById("move-zone");
+let stickOriginX = 0, stickOriginY = 0;
 const knob = document.getElementById("stick-knob");
 const STICK_DEAD_ZONE = 0.20;
 const STICK_KNOB_TRAVEL = 0.42; // fraction of the base diameter
@@ -5082,8 +5091,8 @@ function aimStick(clientX, clientY) {
   const rect = stick.getBoundingClientRect();
   const radius = Math.min(rect.width,rect.height)/2;
   if (radius <= 0) return;
-  const centerX = rect.left + rect.width/2;
-  const centerY = rect.top + rect.height/2;
+  const centerX = stickOriginX;
+  const centerY = stickOriginY;
   let dx = (clientX-centerX)/radius;
   let dy = (clientY-centerY)/radius;
   const magnitude = Math.hypot(dx,dy);
@@ -5118,24 +5127,32 @@ function releaseStick() {
   joystickDirection = null;
   playerMoveTimer = 0;
   if (knob) knob.style.transform = "translate(-50%, -50%)";
-  if (stick) stick.classList.remove("active");
+  if (stickZone) stickZone.classList.remove("active");
 }
-if (stick) {
-  stick.addEventListener("pointerdown", event => {
+if (stickZone) {
+  stickZone.addEventListener("pointerdown", event => {
     if (gameOver || joystickPointerId !== null) return;
     event.preventDefault();
     joystickPointerId = event.pointerId;
-    stick.classList.add("active");
-    try { stick.setPointerCapture?.(event.pointerId); } catch (_) {}
+    const zoneRect = stickZone.getBoundingClientRect();
+    stickOriginX = event.clientX;
+    stickOriginY = event.clientY;
+    // The joystick materializes at the first touch point, not at a fixed center.
+    if (stick) {
+      stick.style.left = `${event.clientX - zoneRect.left}px`;
+      stick.style.top = `${event.clientY - zoneRect.top}px`;
+    }
+    stickZone.classList.add("active");
+    try { stickZone.setPointerCapture?.(event.pointerId); } catch (_) {}
     aimStick(event.clientX,event.clientY);
   });
-  stick.addEventListener("pointermove", event => {
+  stickZone.addEventListener("pointermove", event => {
     if (event.pointerId !== joystickPointerId) return;
     event.preventDefault();
     aimStick(event.clientX,event.clientY);
   });
   for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"])
-    stick.addEventListener(eventName, event => {
+    stickZone.addEventListener(eventName, event => {
       if (event.pointerId === joystickPointerId) releaseStick();
     });
 }
