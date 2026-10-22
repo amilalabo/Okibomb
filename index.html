@@ -59,7 +59,7 @@ canvas{display:block;width:100%;height:100%;aspect-ratio:15/13;user-select:none;
 </style>
 </head>
 <body><main class="shell">
-<div class="header"><div class="brand"><span class="version">VS AI v18</span></div><div class="time" id="match-stats" aria-label="経過時間">00:00</div></div>
+<div class="header"><div class="brand"><span class="version">VS AI v18-LG5</span></div><div class="time" id="match-stats" aria-label="経過時間">00:00</div></div>
 <div class="game-layout">
   <div class="arena">
     <div class="board"><canvas id="game" width="480" height="416" aria-label="対戦フィールド。青があなた、赤がAI v18です"></canvas><div id="result-mark" hidden aria-hidden="true"></div></div>
@@ -87,7 +87,7 @@ canvas{display:block;width:100%;height:100%;aspect-ratio:15/13;user-select:none;
 
 // The on-screen build label is sourced from this script, so replacing game.js
 // always shows the correct opponent even when the HTML is unchanged.
-const AI_BUILD_VERSION = "v18・対人戦特化（生存初手固定・退避記憶・追跡保護）";
+const AI_BUILD_VERSION = "v18-LG5・端通路ギリ置き追撃";
 // Parameter search alters only tactical prioritization / admission criteria.
 // Time-expanded bomb-escape verification and safety invariants are never tunable.
 // LAB_TUNING_START
@@ -144,6 +144,12 @@ const ENEMY_STEP_MS = 120;
 // Real AI movement and decision intervals are both 120ms.
 const ENEMY_PATH_STEP_MS = 200;
 const BOMB_FLAME_MS = 600;
+// LG3: Try late chain bombs from 320ms. A 350ms detonation leaves time
+// for the planting-tick move plus two more 120ms moves; prove all three.
+const V18_GIRI_MIN_CHAIN_MS = 320;
+const V18_GIRI_FAST_WINDOW_MS = 560;
+const V18_EDGE_RELAY_LATE_MS = 400;
+let v18GiriFastPlan = null;
 
 const gamepadKeys = new Set();
 let gamepadBombWasPressed = false;
@@ -253,6 +259,7 @@ function resetGame() {
   playerVisual = createVisualPosition(player.x, player.y);
   enemyVisual = createVisualPosition(enemy.x, enemy.y);
   enemyBombCooldown = 0;
+  v18GiriFastPlan = null;
   enemyMoveTimer = 0;
   lastTime = performance.now();
   enemyEscapeTarget = null;
@@ -584,6 +591,84 @@ function v72CornerCapturePlan(events) {
   return {target,first:found.first,dist:found.dist,remaining:anchor.timer};
 }
 
+// LG5: A bomb on the inner cross-corridor (e.g. 7,3) must not make the
+// agent forget to follow with a bomb on the edge lane (7,1). The first bomb
+// covers the approach column, while the second sweeps horizontally across
+// the player's edge row. We search a short real path and re-evaluate the
+// finishing bomb at the destination. No destruction/soft-block model is used.
+function findV18EdgeLaneRelay(events) {
+  if(!player.alive || enemyBombCooldown>0 || bombs.length!==1 ||
+     bombs[0].owner!=='enemy' || bombs[0].timer<V18_GIRI_MIN_CHAIN_MS ||
+     bombs[0].timer>2000 ||
+     replayClock-lastPlayerMoveAt<ENEMY_STEP_MS*2) return null;
+  const anchor=bombs[0];
+  let target=null;
+  if(player.y===1 && anchor.y===3)target={x:anchor.x,y:1};
+  else if(player.y===ROWS-2 && anchor.y===ROWS-4)
+    target={x:anchor.x,y:ROWS-2};
+  else if(player.x===1 && anchor.x===3)target={x:1,y:anchor.y};
+  else if(player.x===COLS-2 && anchor.x===COLS-4)
+    target={x:COLS-2,y:anchor.y};
+  if(!target || map[target.y][target.x]!==0 ||
+     (player.x===target.x&&player.y===target.y) ||
+     Math.abs(target.x-player.x)+Math.abs(target.y-player.y)>8 ||
+     bombs.some(b=>b.x===target.x&&b.y===target.y))return null;
+  const trial={x:target.x,y:target.y,timer:2000,range:8,owner:'enemy'};
+  const newBlast=getBlastCells(trial),oldBlast=getBlastCells(anchor);
+  if(!newBlast.some(([x,y])=>x===player.x&&y===player.y) ||
+     oldBlast.some(([x,y])=>x===player.x&&y===player.y) ||
+     !oldBlast.some(([x,y])=>x===target.x&&y===target.y))return null;
+  // Protect against unrelated bombs/time-tables: the initial anchor must
+  // really detonate the new bomb, not merely sit near the target.
+  const chain=getTimedBombEvents(trial);
+  if(Math.abs(chain[0].time-chain[1].time)>5)return null;
+  const queue=[{x:enemy.x,y:enemy.y,first:null,dist:0}];
+  const seen=new Set([`${enemy.x},${enemy.y}`]);
+  let goal=null;
+  for(let k=0;k<queue.length;k++){
+    const q=queue[k];
+    if(q.x===target.x&&q.y===target.y){goal=q;break;}
+    if(q.dist>=3)continue;
+    for(const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]){
+      const x=q.x+dx,y=q.y+dy,key=`${x},${y}`;
+      if(seen.has(key)||!enemyCanMove(x,y,events,q.dist+1))continue;
+      seen.add(key);
+      queue.push({x,y,first:q.first||{x,y},dist:q.dist+1});
+    }
+  }
+  if(!goal || anchor.timer-goal.dist*ENEMY_STEP_MS<V18_GIRI_MIN_CHAIN_MS)return null;
+  const relayInfo={anchorId:anchor.replayId,chainMs:Math.round(anchor.timer)};
+  if(!goal.first){
+    if(anchor.timer<=V18_EDGE_RELAY_LATE_MS){
+      const giri=findV18LGiriOkiBomb(events,relayInfo);
+      return giri ? {target,remaining:anchor.timer,giri} : null;
+    }
+    // Maintain a valid escape to the edge even while deliberately waiting.
+    const oldGoal=enemyEscapeGoal;
+    const viable=findTimedSafeStep(enemy.x,enemy.y,null,null,1,ENEMY_STEP_MS,events);
+    enemyEscapeGoal=oldGoal;
+    return viable ? {target,remaining:anchor.timer,wait:true} : null;
+  }
+  const options=getPlayerReachableCells(3);
+  const offense=getEnemyOffenseOpportunity(trial,newBlast,options);
+  const evaluation=evaluateEnemyBombSpot(target.x,target.y,options,{
+    v18EdgeRelay:relayInfo,offense,trialBlast:newBlast,
+    layered:getEnemyLayeredAttackScore(trial,newBlast,options),
+    denied:getV56EscapeDenial(trial,newBlast),
+    counterTrap:getV64CounterTrapScore(trial,newBlast)
+  });
+  if(!evaluation || evaluation.robustExitCount<1 || evaluation.trapRisk>22)
+    return null;
+  if(goal.first){
+    const savedGoal=enemyEscapeGoal;
+    const safe=findTimedSafeStep(goal.first.x,goal.first.y,
+      null,null,1,ENEMY_STEP_MS,events);
+    enemyEscapeGoal=savedGoal;
+    if(!safe)return null;
+  }
+  return {first:goal.first,target,remaining:anchor.timer,evaluation};
+}
+
 // v74: Connect the two stationary-corner bombs at their intersection.
 // The third bomb is a RELAY: the earlier flame ignites it and it can ignite
 // the later second bomb. This is worthwhile only if it genuinely shortens
@@ -684,6 +769,110 @@ function getEnemyLayeredAttackScore(newBomb, blastCells = null, playerOptions = 
 }
 
 
+// v18-L: prioritize genuine perpendicular enclosure rather than rewarding
+// the mere presence of friendly bombs. This is ranking information only:
+// evaluateEnemyBombSpot still performs every timed-escape and trap check.
+function getV18LFormationScore(candidate, candidateBlast=null, reach=null) {
+  const own=bombs.filter(b=>b.owner==='enemy' && b.timer>=740);
+  if (!own.length || !player.alive) return {score:0,kind:'none',newExits:0};
+  const x=candidate.x,y=candidate.y;
+  const blast=new Set((candidateBlast||getBlastCells(candidate))
+    .map(([a,b])=>b*COLS+a));
+  const areas=own.map(b=>new Set(getBlastCells(b)
+    .map(([a,c])=>c*COLS+a)));
+  const covered=new Set();
+  for(const area of areas) for(const cell of area) covered.add(cell);
+  const openDirs=[[0,-1],[0,1],[-1,0],[1,0]];
+  let novelExits=0;
+  for(const [dx,dy] of openDirs){
+    const ex=player.x+dx,ey=player.y+dy;
+    if(ex<1||ey<1||ex>=COLS-1||ey>=ROWS-1||map[ey][ex]!==0 ||
+       bombs.some(b=>b.x===ex&&b.y===ey))continue;
+    const id=ey*COLS+ex;
+    if(blast.has(id)&&!covered.has(id))novelExits++;
+  }
+  let novelPressure=0;
+  for(const pos of (reach||getPlayerReachableCells(3))){
+    if(pos.depth>3)continue;
+    const id=pos.y*COLS+pos.x;
+    if(blast.has(id)&&!covered.has(id))
+      novelPressure+=pos.depth===0?3:pos.depth===1?2:pos.depth===2?1:0.4;
+  }
+  const distTarget=Math.abs(x-player.x)+Math.abs(y-player.y);
+  if(distTarget>6)return {score:0,kind:'none',newExits:0};
+  const adjacentToPlayer=distTarget<=4;
+  let best={score:0,kind:'none',newExits:novelExits};
+  for(const anchor of own){
+    const dx=Math.abs(anchor.x-x),dy=Math.abs(anchor.y-y);
+    // A meaningful L is OFFSET in both axes; adjacent / parallel spam is not.
+    if(dx<1||dy<1||dx+dy<3||dx+dy>7)continue;
+    // There must still be time to approach the candidate before the first bomb.
+    if(anchor.timer<820)continue;
+    const oldDist=Math.abs(anchor.x-player.x)+Math.abs(anchor.y-player.y);
+    const forward=distTarget<=oldDist+1 &&
+      (x-anchor.x)*(player.x-anchor.x)>=0 &&
+      (y-anchor.y)*(player.y-anchor.y)>=0;
+    if(!forward || (novelExits===0 && novelPressure<3))continue;
+    // An L must be close enough in detonation time to close exits together,
+    // not merely form a pretty geometric shape on an obsolete bomb field.
+    const trialEvents=getTimedBombEvents({...candidate,timer:2000,range:8,owner:'enemy'});
+    const anchorIndex=bombs.indexOf(anchor);
+    const timeGap=Math.abs(trialEvents[anchorIndex].time-trialEvents[trialEvents.length-1].time);
+    if(timeGap>920 || trialEvents[trialEvents.length-1].time<710)continue;
+    const score=Math.min(38,
+      10+novelExits*9+Math.min(12,novelPressure*1.15)+
+      (adjacentToPlayer?4:0)+(distTarget<oldDist?3:0)+
+      (timeGap<=350?4:timeGap<=650?2:0));
+    if(score>best.score)best={score,kind:'forward_L',newExits:novelExits};
+  }
+  // Third shot at the elbow of two diagonal anchors can relay their fuses.
+  // Require a real time acceleration; never reward redundant extra bombs.
+  if(own.length>=2){
+    for(let i=0;i<own.length;i++)for(let j=i+1;j<own.length;j++){
+      const a=own[i],b=own[j];
+      if(a.x===b.x||a.y===b.y)continue;
+      if(!((x===a.x&&y===b.y)||(x===b.x&&y===a.y)))continue;
+      if(Math.min(a.timer,b.timer)<800)continue;
+      const baseline=getTimedBombEvents();
+      const events=getTimedBombEvents({...candidate,timer:2000,range:8,owner:'enemy'});
+      const acceleration=Math.max(baseline[bombs.indexOf(a)].time-events[bombs.indexOf(a)].time,
+        baseline[bombs.indexOf(b)].time-events[bombs.indexOf(b)].time);
+      const time=events[events.length-1].time;
+      if(acceleration<180||time<720)continue;
+      const score=28+Math.min(10,acceleration/110)+(novelExits?3:0);
+      if(score>best.score)best={score,kind:'elbow_relay',newExits:novelExits};
+    }
+  }
+  return best;
+}
+
+// Before planting the first bomb, reward a prospective perpendicular follow-up.
+// Hypothetical placements affect only ranking and are NEVER placed unchecked.
+function getV18LOpenerPotential(first, firstBlast=null, options=null){
+  if(bombs.length || !player.alive)return 0;
+  const old=new Set((firstBlast||getBlastCells(first)).map(([x,y])=>y*COLS+x));
+  const reach=options||getPlayerReachableCells(3);
+  if(!reach.some(p=>p.depth<=2&&old.has(p.y*COLS+p.x)))return 0;
+  let best=0;
+  for(const dx of [-3,-2,2,3])for(const dy of [-3,-2,2,3]){
+    const x=first.x+dx,y=first.y+dy;
+    if(x<1||y<1||x>=COLS-1||y>=ROWS-1||map[y][x]!==0)continue;
+    const distance=Math.abs(x-player.x)+Math.abs(y-player.y);
+    if(distance>5)continue;
+    const after=new Set(getBlastCells({x,y,range:8}).map(([a,b])=>b*COLS+a));
+    let novel=0,exits=0;
+    for(const p of reach)if(p.depth<=2 && after.has(p.y*COLS+p.x) &&
+      !old.has(p.y*COLS+p.x))novel++;
+    for(const [ax,ay] of [[0,-1],[0,1],[-1,0],[1,0]]){
+      const ex=player.x+ax,ey=player.y+ay;
+      if(ex>=1&&ey>=1&&ex<COLS-1&&ey<ROWS-1&&map[ey][ex]===0&&
+        after.has(ey*COLS+ex)&&!old.has(ey*COLS+ex))exits++;
+    }
+    if(novel>=2&&exits>=1)best=Math.max(best,Math.min(16,novel*1.5+exits*4));
+  }
+  return best;
+}
+
 // v61: Human-match examples repeatedly use 2-3 tile spacing followed by a
 // perpendicular turn (an L-shaped volley). This is a light look-ahead for
 // ATTACK SELECTION, not a license to place the hypothetical follow-up bomb.
@@ -777,9 +966,18 @@ function evaluateEnemyBombSpot(x, y, playerOptions = null, precomputed = null) {
   const v14OwnBombCount=bombs.filter(b=>b.owner==='enemy').length;
   const v14Followup=v14OwnBombCount>=2; // 3発目以降のみ緩和
   const v16Pressure=precomputed?.v16Pressure || null;
+  const v18LGiri=precomputed?.v18LGiri || null;
+  const v18EdgeRelay=precomputed?.v18EdgeRelay || null;
 
   const distance = Math.abs(player.x - x) + Math.abs(player.y - y);
-  if (distance > 6 || (player.x === x && player.y === y)) return v14BombReject('position_out_of_range');
+  // LG4: When the player is cornered, a deliberately blocked 8-tile
+  // chain can still break a soft block or prepare an edge seal. Do not
+  // mistake that strategic candidate for a direct hit through a wall.
+  const giriRangeOK=!!(v18LGiri && (
+    precomputed?.trialBlast?.some(([bx,by])=>bx===player.x&&by===player.y) ||
+    (v18LGiri.blockedEdge && v18LGiri.alignedDistance<=8)));
+  if ((distance > 6 && !giriRangeOK) || (player.x === x && player.y === y))
+    return v14BombReject('position_out_of_range');
   if (bombs.some(b => b.x === x && b.y === y)) return v14BombReject('tile_occupied');
   const proposedBomb = { x, y, timer: 2000, range: 8, owner: "enemy" };
   // v63: The tactical search has already scored this exact position with
@@ -794,6 +992,8 @@ function evaluateEnemyBombSpot(x, y, playerOptions = null, precomputed = null) {
   const {pressure, hitNow} = offense;
   const layeredAttack=precomputed ? precomputed.layered :
     getEnemyLayeredAttackScore(proposedBomb,blast,options);
+  const v18LCombo=precomputed?.v18LCombo ||
+    getV18LFormationScore(proposedBomb,blast,options);
   const counterTrap=precomputed && precomputed.counterTrap!==undefined ?
     precomputed.counterTrap : getV64CounterTrapScore(proposedBomb,blast);
   const supportedCounter=counterTrap>=13/AI_ATTACK_TUNING.counter && pressure>=3;
@@ -889,7 +1089,7 @@ function evaluateEnemyBombSpot(x, y, playerOptions = null, precomputed = null) {
       offense.leadExitPressure<=1 && offense.threatenedExits<=2 && !supportedCounter && !supportedLaneCut &&
       !v71StrongDirect && !v72VerifiedCounter && !v73TwoExitPressure) return v14BombReject('multi_hostile_bomb_risk');
   // v11: 一本道での設置は禁止。上下一方向ずつでも一つの通路に封鎖される。
-  if (enemyEscapeMobility(x,y,proposedBomb) < (v14Followup?2:3))
+  if (enemyEscapeMobility(x,y,proposedBomb) < (v18EdgeRelay?2:v14Followup?2:3))
     return v14BombReject('no_neighbor_routes');
   // v30: 端で先に爆弾を置くと自分の移動レーンが塞がれる。
   // 相手は新しい爆弾を200msのAI手番の間に置けるため、
@@ -903,7 +1103,7 @@ function evaluateEnemyBombSpot(x, y, playerOptions = null, precomputed = null) {
   const safeEdgeOpening=bombs.length===0 && hitNow && pressure>=10 &&
     distance<=4 && offense.safeExits<=1 &&
     enemyEscapeMobility(x,y,proposedBomb)>=3;
-  if(border===0 && distance<=6 && !safeEdgeOpening && !v72CornerClosure &&
+  if(border===0 && distance<=6 && !safeEdgeOpening && !v72CornerClosure && !v18EdgeRelay &&
       !(v14Followup && (hitNow || offense.threatenedExits>=1)))
     return v14BombReject('border_site');
   // v38: When a fast-moving opponent is RUNNING DOWN OUR CURRENT ROW
@@ -938,7 +1138,7 @@ function evaluateEnemyBombSpot(x, y, playerOptions = null, precomputed = null) {
     return v14BombReject('blast_before_next_tick');
   // 直近のプレイヤー置き爆弾が残存爆弾に誘爆すると、設置後の
   // 1手目が封鎖される。安全な反撃に見えても早期誘爆する候補は避ける。
-  if(enemyBombChainAmbush(proposedBomb) && !v16Pressure) return v14BombReject('predicted_human_chain_ambush');
+  if(enemyBombChainAmbush(proposedBomb) && !v16Pressure && !v18LGiri && !v18EdgeRelay) return v14BombReject('predicted_human_chain_ambush');
   // v23: 自分の爆弾が既存の爆弾に巻き込まれ、実質的な導火線が
   // 1.65秒を下回る場合、追加設置した瞬間に逃げ遅れやすい。
   // 相手は120msごとに移動・追加設置できるため、急な連鎖攻撃は控える。
@@ -946,7 +1146,7 @@ function evaluateEnemyBombSpot(x, y, playerOptions = null, precomputed = null) {
   const rapidChain=bombs.length>0 && distance<=6 && proposedExplosion<1650;
   // v24: 過去のプレイヤーの2～4マス間隔の置き爆弾を模倣。
   // ただし1.15秒未満で誘爆する配置や、爆弾が密集する混戦は見送る。
-  if(rapidChain && !lateSurprise && !v74CornerRelay &&
+  if(rapidChain && !lateSurprise && !v74CornerRelay && !v18LGiri && !v18EdgeRelay &&
       (v16Pressure ? (proposedExplosion<480) :
         v14Followup ? (proposedExplosion<950 ||
         (bombs.filter(b=>b.owner==='player').length>=2 && layeredAttack<14)) :
@@ -956,8 +1156,13 @@ function evaluateEnemyBombSpot(x, y, playerOptions = null, precomputed = null) {
   const escapeDiagnostics = {};
   // v16: 爆弾を置いたAIはその手番では移動しない。次の200msまで
   // そのマスに留まる条件で退避経路を調べる（即時移動を仮定しない）。
-  const escape = findTimedSafeStep(x, y, proposedBomb, escapeDiagnostics, 1,
-    v16Pressure ? ENEMY_STEP_MS : ENEMY_PATH_STEP_MS, initialBombEvents);
+  const giriFast=!!v18LGiri && proposedExplosion<V18_GIRI_FAST_WINDOW_MS;
+  // At 350ms, the conservative 200ms search would incorrectly treat a
+  // feasible two-step retreat as impossible. Only this verified shot uses
+  // the AI's *real* 120ms decision/movement cadence.
+  const escape = findTimedSafeStep(x, y, proposedBomb, escapeDiagnostics,
+    giriFast ? 0 : 1,
+    giriFast || v16Pressure ? ENEMY_STEP_MS : ENEMY_PATH_STEP_MS, initialBombEvents);
   if (!escape) return v14BombReject('full_escape_route_missing');
   const exits = (escapeDiagnostics.viableFirstSteps || []).filter(p => p.x !== x || p.y !== y);
   if (exits.length < (v14Followup?1:2)) return v14BombReject('immediate_exits_insufficient');
@@ -977,10 +1182,19 @@ function evaluateEnemyBombSpot(x, y, playerOptions = null, precomputed = null) {
     return Math.abs(player.x-only.x)+Math.abs(player.y-only.y)>3;
   });
   if (robustExits.length===0) return v14BombReject('robust_exit_missing');
+  // Full-horizon BFS can prefer waiting even when a moving departure is
+  // proven survivable. Use only a proven moving first step for giri-oki.
+  const giriFastRoute=giriFast ? findV18GiriFastRoute(
+    x,y,initialBombEvents,robustExits,escapeBombs) : null;
+  const giriEscape=giriFast ? giriFastRoute?.first : v18LGiri ? robustExits.filter(p=>
+    (p.x!==x||p.y!==y) && enemyCanMove(p.x,p.y,initialBombEvents,1) &&
+    !isTileDangerDuring(p.x,p.y,0,ENEMY_STEP_MS+45,initialBombEvents))
+    .sort((a,b)=>getEnemyPositionRisk(a.x,a.y,escapeBombs).score -
+                 getEnemyPositionRisk(b.x,b.y,escapeBombs).score)[0] : null;
   // v15: 端・角で出口1本しか残らない爆弾は、追加設置で封鎖されやすい。
   // プレイヤーが遠く、退路が十分広ければ従来どおり許可する。
   const siteRisk = getEnemyPositionRisk(x,y).score;
-  if (robustExits.length<2 && !v14Followup &&
+  if (robustExits.length<2 && !v14Followup && !v18EdgeRelay &&
       (distance<=5 || siteRisk>=5 || bombs.length>=2))
     return v14BombReject('two_robust_exits_required');
   // 現在安全でも、プレイヤーが近づいて爆弾を置いた時に退路が消えるか評価する。
@@ -994,13 +1208,13 @@ function evaluateEnemyBombSpot(x, y, playerOptions = null, precomputed = null) {
   // A brief intentional wait can be safe with a long fuse; keep it only
   // when the first two movement ticks are clear and two exits remain.
   // true に固定した攻撃フラグだけで、全ての初手に連鎖専用の制限を掛けない。
-  if(linkedOwnBomb && (
+  if(linkedOwnBomb && !v18LGiri && !v18EdgeRelay && (
       (v14Followup?robustExits.length<1:robustExits.length<2) ||
       trapRisk>(v14Followup?15:10) ||
       proposedExplosion<(v16Pressure?480:v14Followup?950:1550) ||
       isTileDangerDuring(x,y,0,ENEMY_STEP_MS*2+45,initialBombEvents)))
     return v14BombReject('linked_bomb_risk');
-  if(rapidChain && !lateSurprise && !v74CornerRelay &&
+  if(rapidChain && !lateSurprise && !v74CornerRelay && !v18LGiri && !v18EdgeRelay &&
      (robustExits.length<(v14Followup?1:2) || trapRisk>=(v14Followup?18:14) ||
       (distance<=2 && robustExits.length<(v14Followup?2:3) &&
        proposedExplosion<(v16Pressure?620:v14Followup?1000:1400))))
@@ -1010,6 +1224,15 @@ function evaluateEnemyBombSpot(x, y, playerOptions = null, precomputed = null) {
   if (lateSurprise && (proposedExplosion<760 || proposedExplosion>1050 ||
       robustExits.length<2 || exits.length<2 || trapRisk>10 ||
       (escape.x===x && escape.y===y))) return v14BombReject('late_surprise_risk');
+  // Giri-oki is an EXCEPTION to early-chain heuristic thresholds, never
+  // an exception to full escape, countertrap, or next-tick hazard checks.
+  if(v18LGiri && (proposedExplosion<V18_GIRI_MIN_CHAIN_MS || proposedExplosion>1100 ||
+      (v18EdgeRelay && giriFastRoute ?
+        (robustExits.length<1 || exits.length<2 || trapRisk>22) :
+        (robustExits.length<2 || exits.length<2 || trapRisk>10)) ||
+      !giriEscape || (giriFast && !giriFastRoute) ||
+      isTileDangerDuring(x,y,0,ENEMY_STEP_MS*2+45,initialBombEvents)))
+    return v14BombReject('giri_oki_timing_or_escape_risk');
   if(v72VerifiedCounter && (robustExits.length<3 || trapRisk>11 ||
        proposedExplosion<1300))return v14BombReject('verified_counter_risk');
   if(v73TwoExitPressure && livePlayerBombCount>=2 &&
@@ -1026,6 +1249,7 @@ function evaluateEnemyBombSpot(x, y, playerOptions = null, precomputed = null) {
      trapRisk>12 || (escape.x===x&&escape.y===y)))return v14BombReject('corner_relay_risk');
   return { proposedBomb, pressure, hitNow, escape, exits: exits.length,
     robustExitCount:robustExits.length, trapRisk, offense, layeredAttack, v56Denial,
+    v18LCombo,v18LGiri,v18EdgeRelay,giriEscape,giriFastRoute,
     counterTrap, controlledCrossfire, v74OffsetVolley,
     realLinkedOwnBomb:linkedOwnBomb, ownAnchorCount:ownAnchors.length,
     v74NovelExitCount:v74NovelShot.novel,
@@ -1050,6 +1274,18 @@ function placeEnemyBomb(precheckedEvaluation = null) {
   }
   const newBomb = { ...evaluation.proposedBomb, replayId: ++replayBombId };
   bombs.push(newBomb);
+  if(evaluation.v18EdgeRelay)replayLog('ai_v18_edge_lane_relay',{
+    at:{x:newBomb.x,y:newBomb.y},player:{x:player.x,y:player.y},
+    anchorId:evaluation.v18EdgeRelay.anchorId,
+    chainMs:evaluation.v18EdgeRelay.chainMs,
+    robustExits:evaluation.robustExitCount});
+  if(evaluation.v18LGiri)replayLog('ai_v18_l_giri_oki',{
+    at:{x:newBomb.x,y:newBomb.y},player:{x:player.x,y:player.y},
+    ...evaluation.v18LGiri,robustExits:evaluation.robustExitCount});
+  if (evaluation.v18LCombo?.score>=15)replayLog('ai_v18_l_formation',{
+    at:{x:newBomb.x,y:newBomb.y},kind:evaluation.v18LCombo.kind,
+    score:evaluation.v18LCombo.score,newExits:evaluation.v18LCombo.newExits,
+    robustExits:evaluation.robustExitCount});
   if(evaluation.v74CornerRelay) replayLog('ai_v74_corner_relay',{
     at:{x:newBomb.x,y:newBomb.y},player:{x:player.x,y:player.y},
     robustExits:evaluation.robustExitCount});
@@ -1114,6 +1350,9 @@ function placeEnemyBomb(precheckedEvaluation = null) {
     v72VerifiedCounter:!!evaluation.v72VerifiedCounter,
     v74CornerRelay:!!evaluation.v74CornerRelay,
     layeredAttack:evaluation.layeredAttack||0, v56Denial:evaluation.v56Denial||null,
+    v18LCombo:evaluation.v18LCombo||null,
+    v18LGiri:evaluation.v18LGiri||null,
+    v18EdgeRelay:evaluation.v18EdgeRelay||null,
     positionRisk:getEnemyPositionRisk(newBomb.x,newBomb.y) });
   replaySnapshot("bomb_placed");
   enemyEscapeTarget = null;
@@ -2382,6 +2621,140 @@ function v16HumanCounterBombSafe(p) {
 // per anchor prevents an apparently "rare" chance from becoming almost
 // guaranteed after repeated 120ms ticks. The normal survival checker remains
 // authoritative and the final selector requires two independent robust exits and a move.
+// v18-LG: blast-reachable, deliberately late chain-reaction shot.
+// A +200 attack preference is only considered when the EXISTING bomb can
+// really ignite the newly planted one AND its blast newly seals a player
+// escape square. No bonus may substitute for the full timed-survival proof.
+// Three *committed* escape steps for a sub-560ms chain. The planted bomb's
+// orthogonal cross generally requires moving sideways and then turning;
+// stopping after the first step is fatal. Restrict the destination to a
+// tile safe throughout the known flame horizon, not just on arrival.
+function findV18GiriFastRoute(x,y,events,viableFirstSteps,allBombs) {
+  const fullEnd=Math.max(0,...events.map(e=>e.time+BOMB_FLAME_MS),
+    ...flames.map(f=>f.timer))+45;
+  const candidates=[];
+  const dirs=[[0,-1],[0,1],[-1,0],[1,0]];
+  const open=p=>p.x>=1&&p.y>=1&&p.x<COLS-1&&p.y<ROWS-1&&
+    map[p.y][p.x]===0&&!(player.alive&&p.x===player.x&&p.y===player.y)&&
+    !allBombs.some(b=>b.x===p.x&&b.y===p.y);
+  for(const first of viableFirstSteps){
+    if(Math.abs(first.x-x)+Math.abs(first.y-y)!==1 || !open(first) ||
+       isTileDangerDuring(first.x,first.y,0,ENEMY_STEP_MS+45,events))continue;
+    for(const [dx2,dy2] of dirs){
+      const second={x:first.x+dx2,y:first.y+dy2};
+      if(second.x===x&&second.y===y||!open(second)||
+         isTileDangerDuring(second.x,second.y,
+           ENEMY_STEP_MS-35,ENEMY_STEP_MS*2+45,events))continue;
+      for(const [dx3,dy3] of dirs){
+        const third={x:second.x+dx3,y:second.y+dy3};
+        if(third.x===x&&third.y===y||!open(third)||
+           isTileDangerDuring(third.x,third.y,
+             ENEMY_STEP_MS*2-35,fullEnd,events))continue;
+        candidates.push({first:{x:first.x,y:first.y},second,third,
+          score:getEnemyPositionRisk(third.x,third.y,allBombs).score+
+            getEnemyPositionRisk(first.x,first.y,allBombs).score*0.15});
+      }
+    }
+  }
+  candidates.sort((a,b)=>a.score-b.score);
+  return candidates[0]||null;
+}
+function findV18LGiriOkiBomb(currentEvents, edgeRelayInfo = null) {
+  if(!player.alive || enemyBombCooldown>0 || bombs.length<1 || bombs.length>5 ||
+     bombs.some(b=>b.x===enemy.x&&b.y===enemy.y))return null;
+  // LG4: Keep the true collision-aware blast map, but do not require a
+  // *direct* hit to consider an endgame chain attack. Hard walls never
+  // transmit flames; breaking a soft block helps only future attacks.
+  if(enemy.x===player.x && enemy.y===player.y)return null;
+  const proposed={x:enemy.x,y:enemy.y,timer:2000,range:8,owner:'enemy'};
+  const blast=getBlastCells(proposed);
+  const blastSet=new Set(blast.map(([x,y])=>y*COLS+x));
+  const targetInBlast=blastSet.has(player.y*COLS+player.x);
+  const edgeDepth=Math.min(player.x-1,COLS-2-player.x,
+    player.y-1,ROWS-2-player.y);
+  // An aligned target can be hidden by a hard or soft blocker. Unlike
+  // raw Manhattan range, this is strictly limited to the bomb's 8 cells.
+  const alignedDistance=player.x===enemy.x ? Math.abs(player.y-enemy.y) :
+    player.y===enemy.y ? Math.abs(player.x-enemy.x) : Infinity;
+  let blocker=null;
+  if(!targetInBlast && alignedDistance<=8) {
+    const dx=Math.sign(player.x-enemy.x),dy=Math.sign(player.y-enemy.y);
+    for(let i=1;i<=alignedDistance;i++){
+      const x=enemy.x+dx*i,y=enemy.y+dy*i;
+      if(map[y][x]===1||map[y][x]===2){
+        blocker={x,y,kind:map[y][x]===2?'soft':'hard'};
+        break;
+      }
+    }
+  }
+  if(!targetInBlast && edgeDepth>2)return null;
+  const existingCoverage=new Set();
+  for(const ev of currentEvents){
+    // Only fire that actually overlaps in time with the planned chain counts.
+    if(ev.time<V18_GIRI_MIN_CHAIN_MS || ev.time>1100)continue;
+    for(const [x,y] of ev.cells)existingCoverage.add(y*COLS+x);
+  }
+  const reachable=getPlayerReachableCells(2);
+  let best=null;
+  for(let i=0;i<bombs.length;i++){
+    const anchor=bombs[i],evt=currentEvents[i];
+    // An anchor may also be several tiles away: only actual blast contact
+    // at the AI's square matters, not a fixed four-tile anchor radius.
+    if(!evt || evt.time<V18_GIRI_MIN_CHAIN_MS || evt.time>1100 ||
+       !evt.cells.some(([x,y])=>x===enemy.x&&y===enemy.y))continue;
+    // The chain must cover the player now, or an immediately reachable
+    // position, in addition to removing an escape that the old blast missed.
+    let newExits=0,nearbyNew=0;
+    for(const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]){
+      const x=player.x+dx,y=player.y+dy;
+      if(x<=0||y<=0||x>=COLS-1||y>=ROWS-1||map[y][x]!==0 ||
+         bombs.some(b=>b.x===x&&b.y===y))continue;
+      const id=y*COLS+x;
+      if(blastSet.has(id)&&!existingCoverage.has(id))newExits++;
+    }
+    for(const p of reachable)if(p.depth<=1 &&
+       blastSet.has(p.y*COLS+p.x)&&!existingCoverage.has(p.y*COLS+p.x))nearbyNew++;
+    // Direct finishers keep LG3's requirement for genuinely new exits.
+    // Blocked endgame shots may be useful as a side-lane cut or as a soft
+    // block breaker. On the outermost edge, an aligned hard-wall shot is
+    // intentionally permitted as an aggressive *experiment*, despite not
+    // directly reaching the player; never bypass the escape simulation.
+    const blockedEdge=!targetInBlast && edgeDepth<=2 && (
+      newExits>=1 || nearbyNew>=1 ||
+      !!blocker);
+    if(targetInBlast ? (newExits<1||nearbyNew<1) : !blockedEdge)continue;
+    // Verify actual chain detonation including OTHER bombs and chain links.
+    const timeline=getTimedBombEvents(proposed);
+    const time=timeline[timeline.length-1].time;
+    if(Math.abs(time-evt.time)>5 || time<V18_GIRI_MIN_CHAIN_MS || time>1100)continue;
+    const score=(targetInBlast?300:170)+newExits*22+nearbyNew*5+
+      (targetInBlast?25:0)+(blocker?.kind==='soft'?24:0);
+    if(!best||score>best.score)best={score,newExits,nearbyNew,
+      blockedEdge,targetInBlast,alignedDistance:Number.isFinite(alignedDistance)?alignedDistance:null,
+      blocker,edgeDepth,anchorId:anchor.replayId,
+      chainMs:Math.round(time),anchorOwner:anchor.owner||'player'};
+  }
+  if(!best)return null;
+  const options=getPlayerReachableCells(3);
+  const offense=getEnemyOffenseOpportunity(proposed,blast,options);
+  // In the cornered/blocked exception, it is possible to have zero
+  // immediate pressure. This is an intentional aggressive setup shot,
+  // NOT a claim that its flames will reach through an unbreakable wall.
+  if(!best.blockedEdge && (offense.pressure<3 ||
+     (!offense.hitNow && offense.threatenedExits===0 && offense.leadHits<1)))return null;
+  const evaluation=evaluateEnemyBombSpot(enemy.x,enemy.y,options,{
+    v18LGiri:best,v18EdgeRelay:edgeRelayInfo,trialBlast:blast,offense,
+    layered:getEnemyLayeredAttackScore(proposed,blast,options),
+    denied:getV56EscapeDenial(proposed,blast),
+    counterTrap:getV64CounterTrapScore(proposed,blast)
+  });
+  if(!evaluation?.v18LGiri)return null;
+  const escape=evaluation.giriEscape;
+  if(!escape || (escape.x===enemy.x&&escape.y===enemy.y) ||
+     Math.abs(escape.x-enemy.x)+Math.abs(escape.y-enemy.y)!==1)return null;
+  return evaluation;
+}
+
 function findV69LateSurpriseBomb() {
   if(!player.alive || enemyBombCooldown>0 || bombs.length!==1 ||
      bombs[0].owner!=='enemy' || replayClock-lastV69SurpriseAt<17000)
@@ -2554,9 +2927,10 @@ function findBestTacticalAttackStep() {
       const trialBlast=getBlastCells(trial);
       const offense=getEnemyOffenseOpportunity(trial,trialBlast,options);
       const layered=getEnemyLayeredAttackScore(trial,trialBlast,options);
+      const v18LCombo=getV18LFormationScore(trial,trialBlast,options);
       const counterTrap=counterContext ?
         getV64CounterTrapScore(trial,trialBlast,counterContext) : 0;
-      if(offense.pressure>=5/AI_ATTACK_TUNING.aggression ||
+      if(v18LCombo.score>=15 || offense.pressure>=5/AI_ATTACK_TUNING.aggression ||
          (offense.threatenedExits>=2 && offense.pressure>=3) ||
          (offense.leadHits>=3 && offense.leadExitPressure>=2 && offense.pressure>=3) ||
          (layered>=12 && offense.pressure>=3) ||
@@ -2567,6 +2941,7 @@ function findBestTacticalAttackStep() {
            offense.threatenedExits>=1 || offense.leadHits>=2 || layered>=7))) {
         const denied=getV56EscapeDenial(trial,trialBlast);
         const setup=getV61VolleySetupPotential(trial,trialBlast,options);
+        const v18LOpener=getV18LOpenerPotential(trial,trialBlast,options);
         // v63: The old 75-second gate made the human-inspired follow-up
         // priority completely inactive in 30-second training matches. Rank
         // offset shots while a fresh anchor is still live, rather than
@@ -2579,8 +2954,10 @@ function findBestTacticalAttackStep() {
           layered*3.6*AI_ATTACK_TUNING.layered+anchorBonus+denied.score*3.0+
           setup*3.0+counterTrap*2.4*AI_ATTACK_TUNING.counter+
           offense.laneCut*5.0*AI_ATTACK_TUNING.laneCut+
-          offense.interdiction*3.4-spot.distance*4.2;
-        prospects.push({...spot,priority,offense,layered,denied,setup,counterTrap,trialBlast});
+          offense.interdiction*3.4+v18LCombo.score*7.2+
+          v18LOpener*3.8-spot.distance*4.2;
+        prospects.push({...spot,priority,offense,layered,denied,setup,counterTrap,
+          v18LCombo,trialBlast});
       }
     }
     for (const [dx,dy] of dirs) {
@@ -2598,7 +2975,8 @@ function findBestTacticalAttackStep() {
     // 外周攻撃は確実な圧力がある場合に許すが、同等の攻撃なら退路の広い地点を選ぶ。
     const siteRisk=getEnemyPositionRisk(spot.x,spot.y).score;
     const score=spot.priority+ev.exits*2-siteRisk*1.4 - ev.trapRisk*1.2 +
-      (ev.layeredAttack||0)*0.6+(ev.v56Denial?.score||0)*0.8;
+      (ev.layeredAttack||0)*0.6+(ev.v56Denial?.score||0)*0.8+
+      (ev.v18LCombo?.score||0)*1.0;
     if (!best||score>best.score) best={first:spot.first,score};
     // 高得点の実行可能な攻撃候補を見つけたら、無駄な探索は打ち切る。
     if (spot.priority < best.score-25) break;
@@ -3994,6 +4372,32 @@ function update(dt) {
     let v69VerifiedEscape=null;
     let v70UnthreatenedPlan=null;
     let v18EscapingThisTick=false;
+    // LG3: Finish the committed fast-escape steps before other tactics.
+    // Revalidate against live player movement and bomb timers each tick.
+    let v18GiriFastHandled=false;
+    if(v18GiriFastPlan){
+      const p=v18GiriFastPlan;
+      v18GiriFastPlan=null;
+      const previous=p.steps[p.nextIndex-1],next=p.steps[p.nextIndex];
+      if(next && replayClock-p.placedAt<=p.nextIndex*ENEMY_THINK_INTERVAL+65 &&
+         enemy.x===previous.x&&enemy.y===previous.y &&
+         enemyCanMove(next.x,next.y,getTimedBombEvents(),1) &&
+         !isTileDangerDuring(next.x,next.y,0,
+           (p.nextIndex===p.steps.length-1 ? ENEMY_STEP_MS*2 : ENEMY_STEP_MS)+45,
+           getTimedBombEvents())){
+        enemy.x=next.x;enemy.y=next.y;
+        v18GiriFastHandled=true;
+        v60PlacedBomb=true;
+        v74CommittedAssault=true;
+        v18EscapingThisTick=true;
+        replayLog('ai_v18_l_giri_fast_exit',{from:previous,to:next,step:p.nextIndex+1});
+        replayRecordDecision('giri_oki_fast_exit',{
+          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
+          activeBombs:bombs.length});
+        p.nextIndex++;
+        if(p.nextIndex<p.steps.length)v18GiriFastPlan=p;
+      }
+    }
     v18StrategicSafety=null;
     v18ThreatSafety=null;
     const currentEvents = getTimedBombEvents();
@@ -4001,10 +4405,49 @@ function update(dt) {
       event.cells.some(([x, y]) => x === enemy.x && y === enemy.y) && event.time <= 2600
     ) || flames.some(flame => flame.cells.some(([x, y]) => x === enemy.x && y === enemy.y));
 
+    // LG5: Give the 7,3 -> 7,1 finisher priority over generic retreat.
+    // If a safer exit is not provable, the normal survival branch takes over.
+    let v18EdgeRelayHandled=false;
+    const edgeRelay=v18GiriFastHandled ? null : findV18EdgeLaneRelay(currentEvents);
+    if(edgeRelay){
+      if(edgeRelay.giri && placeEnemyBomb(edgeRelay.giri)){
+        v18EdgeRelayHandled=true;v60PlacedBomb=true;v74CommittedAssault=true;
+        const shot=edgeRelay.giri;
+        const step=shot.giriEscape;
+        const post=getTimedBombEvents();
+        if(enemyCanMove(step.x,step.y,post,1) &&
+           !isTileDangerDuring(step.x,step.y,0,ENEMY_STEP_MS+45,post)){
+          enemy.x=step.x;enemy.y=step.y;
+          if(shot.giriFastRoute){
+            v18GiriFastPlan={placedAt:replayClock,nextIndex:1,
+              steps:[shot.giriFastRoute.first,shot.giriFastRoute.second,
+                     shot.giriFastRoute.third]};
+          }
+        }
+        replayRecordDecision('edge_lane_giri_oki',{
+          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
+          remainingMs:edgeRelay.remaining,activeBombs:bombs.length});
+      }else if(edgeRelay.wait){
+        v18EdgeRelayHandled=true;v60PlacedBomb=true;v74CommittedAssault=true;
+        replayRecordDecision('edge_lane_hold',{
+          from:previousEnemyPosition,to:previousEnemyPosition,
+          remainingMs:edgeRelay.remaining,activeBombs:bombs.length});
+      }else if(edgeRelay.first){
+        enemy.x=edgeRelay.first.x;enemy.y=edgeRelay.first.y;
+        v18EdgeRelayHandled=true;v60PlacedBomb=true;v74CommittedAssault=true;
+        replayLog('ai_v18_edge_lane_approach',{
+          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
+          target:edgeRelay.target,remainingMs:edgeRelay.remaining});
+        replayRecordDecision('edge_lane_approach',{
+          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
+          activeBombs:bombs.length});
+      }
+    }
+
     // v72: Execute an intentional two-sided corner lock instead of letting
     // every escape heuristic drag the AI away from its follow-up site.
     // Any failed movement/survival/placement test falls back to v71.
-    const v72Setup=v72CornerCapturePlan(currentEvents);
+    const v72Setup=(v18GiriFastHandled || v18EdgeRelayHandled) ? null : v72CornerCapturePlan(currentEvents);
     let v72Handled=false;
     if(v72Setup){
       if(v72Setup.first){
@@ -4028,7 +4471,7 @@ function update(dt) {
       }
     }
     let v74RelayHandled=false;
-    if(!v72Handled){
+    if(!v72Handled && !v18GiriFastHandled && !v18EdgeRelayHandled){
       const relay=v74CornerRelayPlan(currentEvents);
       if(relay && relay.first){
         enemy.x=relay.first.x;enemy.y=relay.first.y;
@@ -4057,7 +4500,7 @@ function update(dt) {
     ) || flames.some(flame =>
       flame.cells.some(([x, y]) => x === enemy.x && y === enemy.y));
 
-    if (v72Handled || v74RelayHandled) {
+    if (v18GiriFastHandled || v18EdgeRelayHandled || v72Handled || v74RelayHandled) {
       // 先に検証済みの角封鎖/リレー攻撃を尊重する。
     } else {
       // 期限が750msより後でも、後続の爆発から逃げ切れない場合は
@@ -4077,7 +4520,29 @@ function update(dt) {
       }
       const mustEvade = isImminentDanger || (currentThreat && !verifiedEscape);
 
-      if (!mustEvade) {
+      // A validated last-second bomb may supersede the regular escape
+      // branch ONLY if the planting turn and the very next move are safe.
+      // Unlike generic attack movement, follow the verified escape step.
+      const giri = enemyBombCooldown<=0 ? findV18LGiriOkiBomb(currentEvents) : null;
+      if(giri && placeEnemyBomb(giri)) {
+        v60PlacedBomb=true;
+        const step=giri.giriEscape;
+        const post=getTimedBombEvents();
+        if(enemyCanMove(step.x,step.y,post,1) &&
+           !isTileDangerDuring(step.x,step.y,0,ENEMY_STEP_MS+45,post)){
+          enemy.x=step.x;enemy.y=step.y;
+          v74CommittedAssault=true;
+          if(giri.giriFastRoute){
+            v18GiriFastPlan={placedAt:replayClock,nextIndex:1,
+              steps:[giri.giriFastRoute.first,giri.giriFastRoute.second,
+                     giri.giriFastRoute.third]};
+          }
+        }
+        replayRecordDecision('giri_oki_bomb',{
+          currentThreat,isImminentDanger,placed:true,
+          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
+          chainMs:giri.v18LGiri.chainMs,activeBombs:bombs.length});
+      } else if (!mustEvade) {
         // 1. 危険な爆風が届く前でも、設置後の生存を検証できた爆弾は優先する。
         let placed = false;
         let attackAction = 'ultra_attack_move';
