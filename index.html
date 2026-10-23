@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#101b2a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>対 AI v18</title>
+<title>AI対戦 — 対戦相手選択</title>
 <style>
 :root{color-scheme:dark;--bg:#0d1522;--panel:#172639;--edge:#36506a;--text:#f1f8ff;--muted:#9fb6c9;--blue:#39bffa;--red:#ff7777;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif}
 *{box-sizing:border-box}
@@ -64,7 +64,7 @@ canvas{display:block;width:100%;height:100%;aspect-ratio:15/13;user-select:none;
   <div class="arena">
     <div class="board"><canvas id="game" width="480" height="416" aria-label="対戦フィールド。青があなた、赤がAI v18です"></canvas><div id="result-mark" hidden aria-hidden="true"></div></div>
     <div id="message" role="status" aria-live="polite">対戦開始</div>
-    <div class="legend"><span><i class="dot"></i>青：あなた</span><span><i class="dot red"></i>赤：AI v18</span></div>
+    <div class="legend"><span><i class="dot"></i>青：あなた</span><span><i class="dot red"></i> <span id="opponent-legend">赤：AI v18-LG5</span></span></div>
   </div>
   <div class="control-panel">
     <div class="actions"><button id="restart" type="button">↻ もう一度対戦</button></div>
@@ -87,7 +87,10 @@ canvas{display:block;width:100%;height:100%;aspect-ratio:15/13;user-select:none;
 
 // The on-screen build label is sourced from this script, so replacing game.js
 // always shows the correct opponent even when the HTML is unchanged.
-const AI_BUILD_VERSION = "v18-LG5・端通路ギリ置き追撃";
+const LG5_BUILD_VERSION = "v18-LG5";
+const LANE_BUILD_VERSION = "通路圧力AI v4.2";
+let activeAiMode = 'lg5';
+let AI_BUILD_VERSION = LG5_BUILD_VERSION;
 // Parameter search alters only tactical prioritization / admission criteria.
 // Time-expanded bomb-escape verification and safety invariants are never tunable.
 // LAB_TUNING_START
@@ -278,6 +281,15 @@ function resetGame() {
   v69SurpriseRolls = new Map();
   lastV69SurpriseAt = -Infinity;
 
+  laneBombHistory = new Map();
+  laneVisits = new Map();
+  laneGoal = null;
+  laneLastBombAt = -Infinity;
+  laneLastProof = null;
+  laneCommittedRoute = null;
+  laneOpeningAnchor = null;
+  laneOpeningCompleted = false;
+
   replayClock = 0;
   replayBombId = 0;
   heldKeys.clear();
@@ -289,7 +301,7 @@ function resetGame() {
   if (stickEl) stickEl.classList.remove("active");
   if (stickKnob) stickKnob.style.transform = "translate(-50%, -50%)";
   playerMoveTimer = 0;
-  message.textContent = "対戦中 — 青：あなた / 赤：AI v18";
+  message.textContent = `対戦中 — 青：あなた / 赤：${AI_BUILD_VERSION}`;
   const resultMark = document.getElementById("result-mark");
   if (resultMark) { resultMark.hidden = true; resultMark.textContent = ""; }
   if (typeof updateMatchStatus === "function") updateMatchStatus();
@@ -4313,6 +4325,455 @@ function escapeEnemyAI() {
 }
 
 
+// ------------------------------------------------------------
+// Lane Pressure v3: opening counter-trap awareness and central approach.
+// The LG5 offensive heuristics are intentionally NOT used.
+// ------------------------------------------------------------
+const LANE_DIRS = [[0,-1],[1,0],[0,1],[-1,0],[0,0]];
+const LANE_MOVE_MS = ENEMY_THINK_INTERVAL;
+// Time envelopes include 120ms nominal moves and slower real frame cadence.
+const LANE_MOVE_SLOW_MS = 142;
+const LANE_BOMB_INTERVAL = 360;
+const LANE_SITE_REUSE_MS = 3600;
+let laneBombHistory = new Map();
+let laneVisits = new Map();
+let laneGoal = null;
+let laneLastBombAt = -Infinity;
+let laneLastProof = null;
+let laneCommittedRoute = null;
+let laneOpeningAnchor = null;
+let laneOpeningCompleted = false;
+
+// Bombing on the outermost ring invites predictable in-and-out trips.
+// Reject those as *voluntary* attack sites; the ring stays usable to escape.
+function laneSiteDepth(x,y) {
+  return Math.min(x-1,COLS-2-x,y-1,ROWS-2-y);
+}
+function laneAttackSiteAllowed(x,y) {
+  return laneSiteDepth(x,y) >= 1;
+}
+function laneKey(x,y) {return y * COLS + x;}
+function laneWalk(x,y) {return x>=0 && y>=0 && x<COLS && y<ROWS && map[y][x]===0;}
+function laneDegree(x,y) {return LANE_DIRS.slice(0,4).filter(([dx,dy])=>laneWalk(x+dx,y+dy)).length;}
+function laneOccupied(x,y, allBombs=bombs) {
+  return (player.alive && player.x===x && player.y===y) ||
+    allBombs.some(b=>b.x===x && b.y===y);
+}
+
+// For each step, prove there is a complete route until EVERY known blast ends.
+// Dynamic programming from future -> now handles staggered and linked bombs.
+// Existing flame duration, bomb body collisions and the full 8-tile range apply.
+// It does not attempt to predict bombs the player has not yet placed.
+function laneSafeFirstSteps(extraBomb=null) {
+  const allBombs = extraBomb ? [...bombs,extraBomb] : bombs;
+  const events = getTimedBombEvents(extraBomb);
+  const maxEnd = Math.max(0,...events.map(e=>e.time+BOMB_FLAME_MS),
+    ...flames.map(f=>f.timer));
+  const steps = Math.min(34, Math.max(2, Math.ceil(maxEnd/LANE_MOVE_MS)+4));
+  const size=COLS*ROWS;
+  const blocked = new Uint8Array(size);
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++)if(!laneWalk(x,y))blocked[laneKey(x,y)]=1;
+  for(const b of allBombs)blocked[laneKey(b.x,b.y)]=1;
+  if(player.alive)blocked[laneKey(player.x,player.y)]=1;
+  const safe=Array.from({length:steps},()=>new Uint8Array(size));
+  for(let k=0;k<steps;k++){
+    const from=Math.max(0,k*LANE_MOVE_MS-36);
+    const to=(k+1)*LANE_MOVE_SLOW_MS+38;
+    const row=safe[k];
+    for(let t=0;t<size;t++)if(!blocked[t])row[t]=1;
+    for(const flame of flames)if(flame.timer>from)
+      for(const [x,y] of flame.cells)row[laneKey(x,y)]=0;
+    for(const e of events)if(e.time<=to && e.time+BOMB_FLAME_MS>=from)
+      for(const [x,y] of e.cells)row[laneKey(x,y)]=0;
+  }
+  // A site is viable if an entire future escape exists from this time step.
+  const future=Array.from({length:steps},()=>new Uint8Array(size));
+  future[steps-1].set(safe[steps-1]);
+  for(let k=steps-2;k>=0;k--){
+    const nxt=future[k+1],cur=future[k];
+    for(let y=1;y<ROWS-1;y++)for(let x=1;x<COLS-1;x++){
+      const t=laneKey(x,y);
+      if(!safe[k][t])continue;
+      if(nxt[t]||nxt[t-1]||nxt[t+1]||nxt[t-COLS]||nxt[t+COLS])cur[t]=1;
+    }
+  }
+  laneLastProof={future,safe,steps};
+  return LANE_DIRS.map(([dx,dy])=>({x:enemy.x+dx,y:enemy.y+dy}))
+    .filter(p=>laneWalk(p.x,p.y) && future[0][laneKey(p.x,p.y)]);
+}
+
+// v4: A cluster of active bombs can leave a narrow but still survivable
+// corridor. Instead of following the previously planned route into the
+// center and waiting for an emergency, find a *complete* path to a refuge.
+// This is a defensive policy, independent of the LG5 offensive AI.
+function laneShelterPlan(proof) {
+  if (!proof || bombs.length < 4) return null;
+  const relevant = bombs.filter(b =>
+    Math.abs(b.x-enemy.x)+Math.abs(b.y-enemy.y) <= 8 && b.timer <= 1650);
+  if (!relevant.length) return null;
+  const size=COLS*ROWS;
+  const maxSteps=Math.min(13,proof.steps-1);
+  // Every state includes its arrival step; revisiting the same square at a
+  // later time is sometimes necessary in a timed explosion puzzle.
+  const seen=Array.from({length:maxSteps},()=>new Uint8Array(size));
+  const queues=[];
+  const origin={x:enemy.x,y:enemy.y};
+  const initial=LANE_DIRS.map(([dx,dy])=>({x:origin.x+dx,y:origin.y+dy}))
+    .filter(p=>laneWalk(p.x,p.y)&&proof.future[0][laneKey(p.x,p.y)]);
+  for(const p of initial){
+    const idx=laneKey(p.x,p.y);
+    if(seen[0][idx])continue;
+    seen[0][idx]=1;
+    queues.push({x:p.x,y:p.y,k:0,prev:null});
+  }
+  let best=null;
+  // Breadth-first order means shorter retreats are examined first, but do
+  // not sacrifice an open interior refuge for a marginally shorter dead end.
+  for(let qi=0;qi<queues.length;qi++){
+    const n=queues[qi];
+    const t=laneKey(n.x,n.y);
+    let stable=true;
+    for(let k=n.k;k<proof.steps;k++)if(!proof.safe[k][t]){stable=false;break;}
+    const degree=laneDegree(n.x,n.y);
+    const depth=Math.min(n.x-1,COLS-2-n.x,n.y-1,ROWS-2-n.y);
+    const playerDist=Math.abs(n.x-player.x)+Math.abs(n.y-player.y);
+    if(stable && degree>=2 && playerDist>=3){
+      // Do not seek a faraway border corridor just because it is quiet.
+      const cost=(n.k+1)*4 + (depth===0?13:depth===1?4:0) +
+        Math.abs(playerDist-5)*0.6 - degree*1.5;
+      if(!best || cost<best.cost)best={node:n,cost};
+    }
+    if(n.k+1>=maxSteps)continue;
+    for(const [dx,dy] of LANE_DIRS){
+      const x=n.x+dx,y=n.y+dy;
+      if(!laneWalk(x,y))continue;
+      const idx=laneKey(x,y),k=n.k+1;
+      if(seen[k][idx] || !proof.future[k][idx])continue;
+      seen[k][idx]=1;
+      queues.push({x,y,k,prev:n});
+    }
+  }
+  if(!best)return null;
+  const steps=[];
+  for(let n=best.node;n;n=n.prev)steps.push({x:n.x,y:n.y});
+  steps.reverse();
+  // A refuge path must really leave its starting square; don't turn an
+  // immediate safe-cell evaluation into another prolonged wait.
+  if(steps.length<=1 || (steps[0].x===enemy.x && steps[0].y===enemy.y))return null;
+  return {steps,index:0,signature:laneBombSignature()};
+}
+function laneBombSignature(){
+  return bombs.map(b=>`${b.replayId}:${b.x}:${b.y}`).join('|');
+}
+
+function laneBfsDistances(tx,ty){
+  const dist=new Int16Array(COLS*ROWS).fill(-1);
+  if(!laneWalk(tx,ty))return dist;
+  const queue=[laneKey(tx,ty)];dist[queue[0]]=0;
+  for(let q=0;q<queue.length;q++){
+    const idx=queue[q],x=idx%COLS,y=Math.floor(idx/COLS);
+    for(const [dx,dy] of LANE_DIRS.slice(0,4)){
+      const nx=x+dx,ny=y+dy;
+      if(!laneWalk(nx,ny))continue;
+      const ni=laneKey(nx,ny);
+      if(dist[ni]>=0)continue;
+      dist[ni]=dist[idx]+1;
+      queue.push(ni);
+    }
+  }
+  return dist;
+}
+
+// Pressure is generated by bomb lanes reaching the player's square and
+// the nearby escape squares. It is tactical positioning, not chasing.
+// Solid walls stop blast rays. The board has no soft blocks.
+function lanePressureScore(x,y) {
+  const dist=Math.abs(x-player.x)+Math.abs(y-player.y);
+  if (dist<3) return -90;
+  const cells=getBlastCells({x,y,range:8});
+  let pressure=0;
+  for(const [px,py] of cells){
+    const d=Math.abs(px-player.x)+Math.abs(py-player.y);
+    if(d===0)pressure+=13;
+    else if(d===1)pressure+=3.7;
+    else if(d===2)pressure+=0.65;
+  }
+  return pressure;
+}
+
+// Aim for a ring 4-6 tiles from the human, not physical contact.
+// A bomb should cover the player's lane, preferably from an angle.
+// Start via a broad interior staging junction, not along the outer wall.
+// A corner lane leaves little room to dodge human bombs from the flank.
+// Stay several tiles from the human; this is not a direct chase.
+function laneOpeningGoal() {
+  if(laneOpeningCompleted || replayClock>5200) return null;
+  const hd=Math.abs(enemy.x-player.x)+Math.abs(enemy.y-player.y);
+  if(hd<9){laneOpeningCompleted=true;return null;}
+  if(laneOpeningAnchor){
+    const dist=Math.abs(enemy.x-laneOpeningAnchor.x)+Math.abs(enemy.y-laneOpeningAnchor.y);
+    if(dist<=1){laneOpeningCompleted=true;return null;}
+    if(laneWalk(laneOpeningAnchor.x,laneOpeningAnchor.y) &&
+       !laneOccupied(laneOpeningAnchor.x,laneOpeningAnchor.y))return laneOpeningAnchor;
+    laneOpeningAnchor=null;
+  }
+  const paths=laneBfsDistances(enemy.x,enemy.y);
+  let best=null;
+  for(let y=3;y<ROWS-3;y++)for(let x=3;x<COLS-3;x++){
+    if((x%2)!==1 || (y%2)!==1 || !laneWalk(x,y))continue;
+    const d=paths[laneKey(x,y)];
+    if(d<4 || d>14 || laneOccupied(x,y))continue;
+    const playerDistance=Math.abs(x-player.x)+Math.abs(y-player.y);
+    if(playerDistance<9 || playerDistance>20)continue;
+    const depth=Math.min(x-1,COLS-2-x,y-1,ROWS-2-y);
+    if(depth<2 || laneDegree(x,y)<4)continue;
+    const score=depth*3.2 - d*0.65 - Math.abs(playerDistance-11)*1.05 +
+      Math.min(2,hd-playerDistance)*0.6;
+    if(!best || score>best.score)best={x,y,score};
+  }
+  if(best){laneOpeningAnchor={x:best.x,y:best.y};return laneOpeningAnchor;}
+  laneOpeningCompleted=true;
+  return null;
+}
+
+// v4.2: Attack destinations exclude the outermost ring to avoid going
+// there purely for a bomb, then retracing the same exposed corridor.
+// For goal selection, a good blast lane is not automatically a good place
+// to stand. Reward multiple unblocked exits and penalize edge exposure.
+function laneCounterTrapPenalty(x,y) {
+  const borderDepth=Math.min(x-1,COLS-2-x,y-1,ROWS-2-y);
+  const exits=LANE_DIRS.slice(0,4).filter(([dx,dy])=>
+    laneWalk(x+dx,y+dy) && !laneOccupied(x+dx,y+dy)).length;
+  let penalty=borderDepth===0?29:borderDepth===1?10:0;
+  if(exits<=2)penalty+=8;
+  // In the first few seconds, avoid funneling into a predictable edge lane.
+  if(replayClock<4400 && borderDepth===0)penalty+=11;
+  return penalty;
+}
+
+function laneChooseGoal() {
+  const distances=laneBfsDistances(enemy.x,enemy.y);
+  let best=null;
+  for(let y=1;y<ROWS-1;y++)for(let x=1;x<COLS-1;x++){
+    const t=laneKey(x,y),d=distances[t];
+    if(d<0 || d>20 || laneOccupied(x,y))continue;
+    const degree=laneDegree(x,y);
+    if(degree<2 || !laneAttackSiteAllowed(x,y))continue;
+    const humanDist=Math.abs(x-player.x)+Math.abs(y-player.y);
+    if(humanDist<3)continue;
+    const since=replayClock-(laneBombHistory.get(t)??-Infinity);
+    if(since<LANE_SITE_REUSE_MS)continue;
+    const visitAgo=replayClock-(laneVisits.get(t)??-Infinity);
+    const visitPenalty=Math.max(0,2200-visitAgo)/360;
+    const band=Math.max(-12,13-Math.abs(humanDist-5)*3.6);
+    const attack=lanePressureScore(x,y);
+    const intersection=degree>=4?11:degree===3?8:4.5;
+    const score=intersection+band+attack*1.45-d*0.92-visitPenalty-laneCounterTrapPenalty(x,y)+
+      Math.min(4,Math.max(0,since-LANE_SITE_REUSE_MS)/2600);
+    if(!best||score>best.score)best={x,y,score};
+  }
+  return best?{x:best.x,y:best.y}:null;
+}
+
+function lanePickMove(choices, justPlaced=false) {
+  if(!choices.length)return null;
+  const currentDist=Math.abs(enemy.x-player.x)+Math.abs(enemy.y-player.y);
+  // Do not approach to within two tiles when a safe standoff exists;
+  // emergency retreat still has priority over this preference.
+  const standoff=choices.filter(p=>{
+    const dist=Math.abs(p.x-player.x)+Math.abs(p.y-player.y);
+    return dist>=3 || (currentDist<3 && dist>currentDist);
+  });
+  const pool=standoff.length?standoff:choices;
+  const staging=laneOpeningGoal();
+  if(staging){laneGoal=staging;}
+  else if(!laneGoal || !laneWalk(laneGoal.x,laneGoal.y) ||
+     (laneGoal.x===enemy.x&&laneGoal.y===enemy.y) ||
+     (replayClock-(laneBombHistory.get(laneKey(laneGoal.x,laneGoal.y))??-Infinity)<LANE_SITE_REUSE_MS))
+    laneGoal=laneChooseGoal();
+  const d=laneGoal?laneBfsDistances(laneGoal.x,laneGoal.y):null;
+  let best=null;
+  for(const p of pool){
+    const t=laneKey(p.x,p.y);
+    const waiting=p.x===enemy.x&&p.y===enemy.y;
+    const traveled=replayClock-(laneVisits.get(t)??-Infinity);
+    const playerDist=Math.abs(p.x-player.x)+Math.abs(p.y-player.y);
+    let score=laneDegree(p.x,p.y)*0.6;
+    if(d && d[t]>=0)score-=d[t]*2.2;
+    score-=Math.max(0,1700-traveled)/320;
+    // Stay outside counter-bomb proximity, yet close enough for blast control.
+    score-=Math.abs(playerDist-5)*1.1;
+    if(playerDist<=2)score-=40;
+    if(playerDist<=5&&(p.x===player.x||p.y===player.y))score-=3;
+    // Threat exposure also matters when we are still safely approaching.
+    // Do not override a time-proven escape: this only ranks safe candidates.
+    const borderDepth=Math.min(p.x-1,COLS-2-p.x,p.y-1,ROWS-2-p.y);
+    // Ranking only: emergency escape routes may still pass near an edge.
+    if(borderDepth===0)score-=14;
+    else if(borderDepth===1)score-=4.5;
+    const openExits=LANE_DIRS.slice(0,4).filter(([dx,dy])=>
+      laneWalk(p.x+dx,p.y+dy) && !laneOccupied(p.x+dx,p.y+dy)).length;
+    if(openExits<=2)score-=3;
+    // When equal-length paths exist, steer diagonally into the interior,
+    // rather than following one board edge until the next corner.
+    if(staging && !justPlaced){
+      const remainingX=Math.abs(staging.x-enemy.x);
+      const remainingY=Math.abs(staging.y-enemy.y);
+      const movesX=p.x!==enemy.x, movesY=p.y!==enemy.y;
+      if(movesX && remainingX>=remainingY)score+=1.15;
+      if(movesY && remainingY>remainingX)score+=1.15;
+    }
+    if(waiting)score-=justPlaced?999:2.6;
+    if(justPlaced)score+=Math.abs(p.x-enemy.x)+Math.abs(p.y-enemy.y);
+    if(!best || score>best.score)best={...p,score};
+  }
+  return best;
+}
+
+// Convert a proven safe first step into a committed sequence.  Without
+// commitment a re-evaluation on the next tick could reverse toward a bomb
+// even though the *previous* planning call found a safe complete route.
+function laneMakeRoute(first, proof) {
+  if(!proof)return null;
+  const steps=[{x:first.x,y:first.y}];
+  let here=steps[0];
+  for(let k=1;k<proof.steps;k++){
+    const options=LANE_DIRS.map(([dx,dy])=>({x:here.x+dx,y:here.y+dy}))
+      .filter(p=>laneWalk(p.x,p.y)&&proof.future[k][laneKey(p.x,p.y)]);
+    if(!options.length)return null;
+    options.sort((a,b)=>{
+      const rank=p=>{
+        const t=laneKey(p.x,p.y);
+        let longSafe=0;
+        for(let j=k;j<Math.min(proof.steps,k+7);j++)longSafe+=proof.safe[j][t];
+        const separation=Math.min(8,...bombs.map(q=>Math.abs(q.x-p.x)+Math.abs(q.y-p.y)));
+        return longSafe*8+Math.min(5,separation)*1.2+laneDegree(p.x,p.y)*0.2;
+      };
+      return rank(b)-rank(a);
+    });
+    here=options[0];steps.push(here);
+  }
+  return {steps,index:1};
+}
+
+// New placements can interrupt a committed escape ONLY when the complete
+// route after the additional bomb is proven again. This enables frequent
+// bombing while retaining the original safety test.
+function laneTryPlace() {
+  const humanDist=Math.abs(enemy.x-player.x)+Math.abs(enemy.y-player.y);
+  const posKey=laneKey(enemy.x,enemy.y);
+  const recent=replayClock-(laneBombHistory.get(posKey)??-Infinity);
+  const ownCount=bombs.filter(b=>b.owner==='enemy').length;
+  const degree=laneDegree(enemy.x,enemy.y);
+  if(enemyBombCooldown>0 || replayClock-laneLastBombAt<LANE_BOMB_INTERVAL ||
+     ownCount>=6 || recent<LANE_SITE_REUSE_MS || degree<2 ||
+     !laneAttackSiteAllowed(enemy.x,enemy.y) ||
+     laneOccupied(enemy.x,enemy.y) || humanDist<=2)return null;
+  // When far away, patrol toward the human rather than saturating irrelevant sites.
+  if(humanDist>9 && degree<4)return null;
+  const candidate={x:enemy.x,y:enemy.y,range:8,timer:2000,owner:'enemy'};
+  const options=laneSafeFirstSteps(candidate).filter(p=>p.x!==enemy.x||p.y!==enemy.y);
+  if(!options.length)return null;
+  const proof=laneLastProof;
+  const next=lanePickMove(options,true);
+  if(!next)return null;
+  const bomb={...candidate,replayId:++replayBombId};
+  bombs.push(bomb);
+  laneLastBombAt=replayClock;
+  laneBombHistory.set(posKey,replayClock);
+  enemyBombCooldown=320;
+  laneGoal=null;
+  laneCommittedRoute=laneMakeRoute(next,proof);
+  if(laneCommittedRoute)laneCommittedRoute.signature=laneBombSignature();
+  const from={x:enemy.x,y:enemy.y};
+  enemy.x=next.x;enemy.y=next.y;
+  laneVisits.set(laneKey(enemy.x,enemy.y),replayClock);
+  replayLog('bomb_placed',{id:bomb.replayId,owner:'enemy',x:bomb.x,y:bomb.y,timer:2000,range:8,policy:'lane_pressure_v4'});
+  replayLog('lane_bomb_placed',{x:bomb.x,y:bomb.y,kind:degree>=4?'junction':'corridor',ownCount:ownCount+1,humanDistance:humanDist});
+  replaySnapshot('bomb_placed');
+  return from;
+}
+
+function laneFinishThink(from,action,extra={}) {
+  enemyVisual=animateVisualPosition(enemyVisual,enemy.x,enemy.y,ENEMY_VISUAL_MOVE_MS);
+  replayLog('enemy_step',{from,to:{x:enemy.x,y:enemy.y},...extra});
+  replayRecordDecision(action,{from,to:{x:enemy.x,y:enemy.y},activeBombs:bombs.length});
+  replaySnapshot('ai_tick');
+  enemyMoveTimer=ENEMY_THINK_INTERVAL;
+}
+
+function laneThink() {
+  const from={x:enemy.x,y:enemy.y};
+  laneVisits.set(laneKey(enemy.x,enemy.y),replayClock);
+  // The aggressive attempt is ONLY accepted after validating every future
+  // blast event, including induction and the entire remaining flame duration.
+  // If it cannot be planted safely, keep the committed escape path.
+  const currentSignature=laneBombSignature();
+  // New human bombs invalidate previously proved paths. Existing routes
+  // are not safe merely because their next square is momentarily harmless.
+  if(laneCommittedRoute && laneCommittedRoute.signature !== currentSignature)
+    laneCommittedRoute=null;
+  if(bombs.length>=4 && (!laneCommittedRoute || !laneCommittedRoute.shelter ||
+     laneCommittedRoute.index>=laneCommittedRoute.steps.length)){
+    const options=laneSafeFirstSteps();
+    const shelter=laneShelterPlan(laneLastProof);
+    if(shelter && options.some(p=>p.x===shelter.steps[0].x && p.y===shelter.steps[0].y)){
+      const next=shelter.steps[0];
+      enemy.x=next.x;enemy.y=next.y;
+      laneCommittedRoute={...shelter,index:1,shelter:true};
+      laneVisits.set(laneKey(enemy.x,enemy.y),replayClock);
+      replayLog('lane_shelter_escape',{from,to:next,length:shelter.steps.length});
+      laneFinishThink(from,'lane_shelter_escape',{planted:false});
+      return;
+    }
+  }
+  const plantedFrom=laneTryPlace();
+  if(plantedFrom){
+    laneFinishThink(from,'lane_pressure_bomb_and_escape',{planted:true});
+    return;
+  }
+  if(laneCommittedRoute && laneCommittedRoute.index<laneCommittedRoute.steps.length && bombs.length){
+    const committed=laneCommittedRoute.steps[laneCommittedRoute.index];
+    const possible=laneSafeFirstSteps();
+    if(possible.some(p=>p.x===committed.x&&p.y===committed.y)){
+      enemy.x=committed.x;enemy.y=committed.y;
+      laneCommittedRoute.index++;
+      laneVisits.set(laneKey(enemy.x,enemy.y),replayClock);
+      laneFinishThink(from,'lane_committed_escape',{planted:false,committed:true});
+      return;
+    }
+    laneCommittedRoute=null;
+  } else if(!bombs.length){laneCommittedRoute=null;}
+  const choices=laneSafeFirstSteps();
+  const proof=laneLastProof;
+  const next=lanePickMove(choices,false);
+  if(next){
+    enemy.x=next.x;enemy.y=next.y;
+    if(bombs.length || flames.length){
+      laneCommittedRoute=laneMakeRoute(next,proof);
+      if(laneCommittedRoute)laneCommittedRoute.signature=laneBombSignature();
+    }else laneCommittedRoute=null;
+  }else{
+    // This fallback NEVER authorizes placing an additional bomb.
+    const events=getTimedBombEvents();
+    const immediate=LANE_DIRS.map(([dx,dy])=>({x:enemy.x+dx,y:enemy.y+dy}))
+      .filter(p=>laneWalk(p.x,p.y) && !laneOccupied(p.x,p.y))
+      .filter(p=>!isTileDangerDuring(p.x,p.y,0,LANE_MOVE_MS+28,events));
+    if(immediate.length){
+      immediate.sort((a,b)=>{
+        const ad=Math.abs(a.x-player.x)+Math.abs(a.y-player.y);
+        const bd=Math.abs(b.x-player.x)+Math.abs(b.y-player.y);
+        return (laneDegree(b.x,b.y)+Math.min(7,bd)*0.3)-
+               (laneDegree(a.x,a.y)+Math.min(7,ad)*0.3);
+      });
+      enemy.x=immediate[0].x;enemy.y=immediate[0].y;
+    }
+    replayLog('lane_emergency',{from,to:{x:enemy.x,y:enemy.y}});
+  }
+  laneVisits.set(laneKey(enemy.x,enemy.y),replayClock);
+  laneFinishThink(from,'lane_pressure_patrol',{planted:false});
+}
+
 function update(dt) {
   if (gameOver) return;
   replayClock += dt;
@@ -4353,6 +4814,15 @@ function update(dt) {
 
   enemyBombCooldown = Math.max(0, enemyBombCooldown - dt);
 
+  if (activeAiMode === 'lane') {
+    enemyMoveTimer -= dt;
+    if (enemyMoveTimer <= 0) {
+      aiBlastCache = new Map();
+      v17ClearCaches();
+      v17TimelineCache = new Map();
+      laneThink();
+    }
+  } else {
   // 敵AIをプレイヤーと同じ120msごとに動かす
   enemyMoveTimer -= dt;
 
@@ -4850,18 +5320,20 @@ function update(dt) {
   }
 
 
+  }
+
   // Explosion may alter the terrain; never carry cached blast cells past it.
   aiBlastCache=null;
   aiShadowRiskCache=null;
   v17ClearCaches();
-  // 爆弾のタイマーを進める
-  for (const bomb of [...bombs]) {
-    bomb.timer -= dt;
-
-    if (bomb.timer <= 0) {
-      bombs = bombs.filter(b => b !== bomb);
-      explode(bomb);
-    }
+  // Resolve all chain-reaction explosions in the SAME update before hit
+  // detection; otherwise a losing frame can terminate an unfinished chain.
+  for (const bomb of bombs) bomb.timer -= dt;
+  while (true) {
+    const index = bombs.findIndex(b => b.timer <= 0);
+    if (index < 0) break;
+    const [bomb] = bombs.splice(index, 1);
+    explode(bomb);
   }
 
   // 爆風の持続時間を更新
@@ -4900,8 +5372,8 @@ function update(dt) {
   if (!player.alive || !enemy.alive) {
     gameOver = true;
     const outcome = !player.alive && !enemy.alive ? "draw" : !player.alive ? "lose" : "win";
-    message.textContent = outcome === "win" ? "勝利！ AI v18に勝ちました" :
-      outcome === "lose" ? "敗北！ AI v18の勝ちです" : "引き分け！";
+    message.textContent = outcome === "win" ? `勝利！ ${AI_BUILD_VERSION} に勝ちました` :
+      outcome === "lose" ? `敗北！ ${AI_BUILD_VERSION} の勝ちです` : "引き分け！";
     const resultMark = document.getElementById("result-mark");
     if (resultMark) {
       resultMark.textContent = outcome === "win" ? "WIN" : outcome === "lose" ? "LOSE" : "DRAW";
@@ -5041,7 +5513,65 @@ window.addEventListener("blur", () => {
   heldKeys.clear();
 });
 
+
+// The strategy selector switches only the opponent decision loop.
+// Both strategies share the same map, bomb logic, input and replay system.
+function setupOpponentSelector() {
+  const restart = document.getElementById('restart');
+  if (!restart) return;
+  const host = restart.parentElement;
+  let select = document.getElementById('ai-opponent-select');
+  if (!select) {
+    const wrapper = document.createElement('label');
+    wrapper.className = 'ai-mode-picker';
+    wrapper.setAttribute('for', 'ai-opponent-select');
+    const title = document.createElement('span');
+    title.textContent = '対戦するAI';
+    select = document.createElement('select');
+    select.id = 'ai-opponent-select';
+    for (const [value, caption] of [['lg5','v18-LG5'], ['lane','通路圧力AI v4.2']]) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = caption;
+      select.appendChild(opt);
+    }
+    wrapper.appendChild(title);
+    wrapper.appendChild(select);
+    host.insertBefore(wrapper, restart);
+  }
+  const css = document.createElement('style');
+  css.textContent = `
+    .ai-mode-picker { display:flex; flex-direction:column; gap:4px; min-width:0;
+      font:inherit; color:#d9e8f6; font-weight:700; font-size:12px; }
+    .ai-mode-picker select { min-height:38px; min-width:0; max-width:100%;
+      background:#1a344e; color:#fff; border:1px solid #7295b6; border-radius:8px;
+      padding:7px 8px; font:inherit; font-size:13px; touch-action:manipulation;
+      -webkit-user-select:auto; user-select:auto; }
+    .actions:has(.ai-mode-picker) { justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .actions:has(.ai-mode-picker) .ai-mode-picker { flex:1 1 150px; }
+    .actions:has(.ai-mode-picker) #restart { flex:0 0 auto; }
+    @media(max-width:385px) { .ai-mode-picker select { font-size:12px; } }
+  `;
+  document.head.appendChild(css);
+  select.value = activeAiMode;
+  select.addEventListener('change', () => {
+    const chosen = select.value === 'lane' ? 'lane' : 'lg5';
+    if (chosen === activeAiMode) return;
+    activeAiMode = chosen;
+    AI_BUILD_VERSION = chosen === 'lg5' ? LG5_BUILD_VERSION : LANE_BUILD_VERSION;
+    heldKeys.clear();
+    gamepadKeys.clear();
+    if (typeof releaseStick === 'function') releaseStick();
+    const brand = document.querySelector('.brand .version');
+    if (brand) brand.textContent = chosen === 'lg5' ? 'VS AI v18-LG5' : 'VS 通路圧力AI v4.2';
+    const legend = document.getElementById('opponent-legend');
+    if (legend) legend.textContent = '赤：' + (chosen === 'lg5' ? 'AI v18-LG5' : LANE_BUILD_VERSION);
+    resetGame();
+  });
+}
+
 document.getElementById("restart").addEventListener("click", resetGame);
+setupOpponentSelector();
 
 resetGame();
 requestAnimationFrame(loop);
