@@ -144,6 +144,11 @@ const ctx = canvas.getContext("2d");
 const message = document.getElementById("message");
 
 const heldKeys = new Set();
+// Independent analog information for iPhone: only the touch stick uses assist.
+// Keyboard and gamepad keep their original exact four-direction behavior.
+let touchStickAxes = null;
+let touchTurnLock = null;
+let touchTurnLockReference = null;
 let playerMoveTimer = 0;
 const PLAYER_MOVE_INTERVAL = 120; // グリッド移動間隔（判定は従来どおり）
 const PLAYER_VISUAL_MOVE_MS = 105; // マス間の表示補間時間
@@ -319,6 +324,57 @@ function canMove(x, y) {
   }
 
   return true;
+}
+
+// Slightly diagonal touch inputs can otherwise point straight at a corridor wall.
+// Route correction is exclusively for the virtual stick; it does not alter
+// collision, movement speed, enemy decisions, bombs or gamepad controls.
+function assistedStickStep() {
+  const axes = touchStickAxes;
+  if (!axes) return null;
+  const ax = Math.abs(axes.x), ay = Math.abs(axes.y);
+  const major = Math.max(ax, ay), minor = Math.min(ax, ay);
+  if (major < 0.01) return {dx:0,dy:0};
+  const horizontal = {dx:Math.sign(axes.x),dy:0};
+  const vertical = {dx:0,dy:Math.sign(axes.y)};
+  const primaryAxis = ax >= ay ? 'x' : 'y';
+  const otherAxis = primaryAxis === 'x' ? 'y' : 'x';
+  const direction = axis => axis === 'x' ? horizontal : vertical;
+  const canStep = axis => {
+    const d = direction(axis);
+    return canMove(player.x + d.dx, player.y + d.dy);
+  };
+  // Near-cardinal inputs stay cardinal. Only a meaningful diagonal component
+  // can be used as a fallback when the dominant direction is blocked.
+  const secondaryAllowed = minor >= 0.28 && minor >= major * 0.34;
+  const mainOpen = canStep(primaryAxis);
+  const sideOpen = secondaryAllowed && canStep(otherAxis);
+
+  if (touchTurnLock) {
+    // Keep a completed corner turn stable while the same diagonal is held.
+    // This prevents zigzags through successive intersections.
+    const lockedMagnitude = touchTurnLock === 'x' ? ax : ay;
+    if (lockedMagnitude >= 0.28 && canStep(touchTurnLock))
+      return direction(touchTurnLock);
+    touchTurnLock = null;
+    touchTurnLockReference = null;
+  }
+  if (!mainOpen && sideOpen) return direction(otherAxis);
+  if (!mainOpen) return {dx:0,dy:0};
+
+  // Crossing assist: when arriving at a junction from a straight passage,
+  // a strong diagonal lean toward the perpendicular lane requests that turn.
+  // A shallow lean continues straight; the user can always force a turn by
+  // pushing its axis more strongly. Only act where BOTH options are open.
+  if (sideOpen && minor >= 0.46 && minor >= major * 0.72) {
+    const priorAxis = playerDirX ? 'x' : playerDirY ? 'y' : null;
+    if (priorAxis === primaryAxis) {
+      touchTurnLock = otherAxis;
+      touchTurnLockReference = {x:axes.x,y:axes.y};
+      return direction(otherAxis);
+    }
+  }
+  return direction(primaryAxis);
 }
 
 // 物理/当たり判定はグリッドの座標で処理し、見た目だけ滑らかにつなぐ。
@@ -5856,7 +5912,11 @@ function update(dt) {
     let dx = 0;
     let dy = 0;
 
-    if (heldKeys.has("arrowup") || heldKeys.has("w") || gamepadKeys.has("arrowup")) dy = -1;
+    const assisted = assistedStickStep();
+    if (assisted) {
+      dx = assisted.dx;
+      dy = assisted.dy;
+    } else if (heldKeys.has("arrowup") || heldKeys.has("w") || gamepadKeys.has("arrowup")) dy = -1;
     else if (heldKeys.has("arrowdown") || heldKeys.has("s") || gamepadKeys.has("arrowdown")) dy = 1;
     else if (heldKeys.has("arrowleft") || heldKeys.has("a") || gamepadKeys.has("arrowleft")) dx = -1;
     else if (heldKeys.has("arrowright") || heldKeys.has("d") || gamepadKeys.has("arrowright")) dx = 1;
@@ -6174,13 +6234,32 @@ requestAnimationFrame(loop);
     const factor = distance > maxTravel ? maxTravel/distance : 1;
     thumb.style.transform = `translate(${Math.round(dx*factor)}px,${Math.round(dy*factor)}px)`;
     const deadZone = Math.min(rect.width,rect.height)*0.1;
-    if (distance < deadZone) setDirection('');
-    else if (Math.abs(dx) > Math.abs(dy)) setDirection(dx>0?'arrowright':'arrowleft');
-    else setDirection(dy>0?'arrowdown':'arrowup');
+    if (distance < deadZone) {
+      touchStickAxes = null;
+      touchTurnLock = null;
+      touchTurnLockReference = null;
+      setDirection('');
+    } else {
+      const nextAxes = {x:dx/distance,y:dy/distance};
+      if (touchTurnLockReference &&
+          nextAxes.x*touchTurnLockReference.x + nextAxes.y*touchTurnLockReference.y < 0.92) {
+        // Finger has intentionally changed its angle since the turn.
+        touchTurnLock = null;
+        touchTurnLockReference = null;
+      }
+      touchStickAxes = nextAxes;
+      // Keep the old cardinal key as fallback metadata only; the main loop
+      // now uses both stick axes to correct corridors and intersections.
+      if (Math.abs(dx) > Math.abs(dy)) setDirection(dx>0?'arrowright':'arrowleft');
+      else setDirection(dy>0?'arrowdown':'arrowup');
+    }
   }
 
   function releaseStick() {
     stickPointer = null;
+    touchStickAxes = null;
+    touchTurnLock = null;
+    touchTurnLockReference = null;
     setDirection('');
     thumb.style.transform = 'translate(0px,0px)';
   }
