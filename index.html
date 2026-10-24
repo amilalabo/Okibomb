@@ -2,95 +2,110 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#101b2a">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>置きボン AI Lab | AI対戦</title>
+<meta name="theme-color" content="#0d1320">
+<title>v18-LG5</title>
 <style>
-:root{color-scheme:dark;--bg:#0d1522;--panel:#172639;--edge:#36506a;--text:#f1f8ff;--muted:#9fb6c9;--blue:#39bffa;--red:#ff7777;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif}
-*{box-sizing:border-box}
-html{background:var(--bg);overflow-x:hidden}
-body{margin:0;color:var(--text);background:radial-gradient(ellipse at 40% -20%,#243d5a 0%,var(--bg) 64%);min-height:100svh;padding:env(safe-area-inset-top) max(10px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));overscroll-behavior:contain;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-.shell{max-width:830px;margin:0 auto}
-.header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 3px 10px}
-.brand{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
-h1{font-size:clamp(18px,4.5vw,24px);margin:0;font-weight:900;letter-spacing:.01em}
-.version{font-size:11px;background:#21405b;border:1px solid #355677;border-radius:99px;color:#b6e5ff;font-weight:700;padding:4px 9px}
+:root { color-scheme:dark; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  background:#0d1320; color:#edf4ff; -webkit-text-size-adjust:100%; }
+* { box-sizing:border-box; }
+html { min-height:100%; overscroll-behavior:none; }
+body { margin:0; min-height:100dvh; padding: max(9px,env(safe-area-inset-top)) max(9px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(9px,env(safe-area-inset-left)); }
+body, button, .joystick, .bomb-button, canvas { -webkit-tap-highlight-color:transparent; }
+button, .joystick, .bomb-button, .board { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+main { max-width:510px; margin:0 auto; }
+.brand { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:1px 4px 9px; }
+.brand .name { font-size:20px; font-weight:850; letter-spacing:.01em; }
+.brand .version { font-size:12px; background:#20374e; color:#b8e4ff; padding:6px 10px; border-radius:999px; white-space:nowrap; font-weight:700; }
+.board { border:1px solid #53667a; border-radius:12px; background:#29483d; overflow:hidden; line-height:0; touch-action:none; }
+#game { display:block; width:100%; height:auto; aspect-ratio:15/13; touch-action:none; }
+#message { text-align:center; font-size:15px; font-weight:800; min-height:24px; margin:9px 0 2px; }
+/* 入力エリアは常に固定位置。指を置いた後、中心からの相対方向で移動する。 */
+.controls { display:flex; align-items:center; justify-content:space-between; gap:32px; min-height:184px; padding:9px 8px 8px; touch-action:pan-x pan-y; }
+.joystick { flex:none; width:158px; height:158px; border-radius:50%; border:2px solid #4f6c88;
+ background:radial-gradient(circle at 50% 50%,#263e55 0%,#17293b 72%); position:relative; touch-action:none; cursor:pointer; }
+.joystick::before, .joystick::after { content:""; position:absolute; background:#6c8aa4; opacity:.45; border-radius:2px; pointer-events:none; }
+.joystick::before { left:calc(50% - 1px); top:15px; bottom:15px; width:2px; }
+.joystick::after { top:calc(50% - 1px); left:15px; right:15px; height:2px; }
+.stick-thumb { position:absolute; z-index:2; left:50%; top:50%; width:66px; height:66px; margin:-33px 0 0 -33px;
+ border-radius:50%; border:2px solid #a7c5e4; background:linear-gradient(145deg,#527aa3,#2d526f);
+ box-shadow:0 5px 10px #0715229c; transform:translate(0,0); pointer-events:none; transition:transform 40ms linear; }
+.stick-thumb::before { content:""; position:absolute; inset:20px; border-radius:50%; background:#accde7; opacity:.6; }
+.bomb-button { flex:none; width:110px; height:110px; border-radius:50%; border:3px solid #ffb3a3;
+ background:radial-gradient(circle at 32% 25%,#ff8c78,#c9344e 80%); color:white; font-size:19px; font-weight:850;
+ text-shadow:0 1px 3px #661625; box-shadow:0 7px 0 #762137, 0 10px 20px #040a15ad;
+ touch-action:none; cursor:pointer; }
+.bomb-button:active, .bomb-button.pressed { transform:translateY(4px); box-shadow:0 3px 0 #762137; }
+.settings { border:1px solid #283b50; background:#151f30; border-radius:12px; margin:28px 0 10px; padding:13px; }
+.actions { display:grid; grid-template-columns:minmax(0,1fr) 1fr; gap:10px; align-items:end; }
+.actions .ai-mode-picker { grid-column:1; }
+#restart { grid-column:2; min-height:43px; }
+button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; background:#28527b; color:#fff;
+ border:1px solid #507fac; border-radius:9px; padding:10px 8px; min-height:42px; text-decoration:none; text-align:center; }
+@media (max-width:365px) { .joystick{width:138px;height:138px} .controls{min-height:160px;gap:24px} .bomb-button{width:94px;height:94px;font-size:17px} }
+@media (orientation:landscape) and (max-height:530px) {
+  main { max-width:none; width:100%; }
+  .brand { padding:0 2px 4px; }
+  .brand .name { font-size:15px; }
+  .landscape-layout { display:grid; grid-template-columns:minmax(0,calc((100dvh - 46px)*15/13)) minmax(230px,1fr); gap:16px; justify-content:center; align-items:start; }
+  .game-column { max-width:calc((100dvh - 46px)*15/13); }
+  .controls-column { min-width:0; }
+  .controls { padding:3px 0; min-height:135px; gap:16px; justify-content:space-around; }
+  .joystick { width:126px; height:126px; }
+  .stick-thumb { width:56px;height:56px;margin:-28px 0 0 -28px; }
+  .bomb-button { width:88px;height:88px; font-size:16px; }
+  .settings { margin-top:10px; }
+  #message { font-size:12px; margin:4px 0 1px; }
+}
 
-.game-layout{display:grid;grid-template-columns:minmax(0,480px) minmax(240px,1fr);gap:16px;align-items:start}
-.arena{min-width:0}
-.board{position:relative;width:100%;aspect-ratio:15/13;border:2px solid #607d95;box-shadow:0 0 0 4px #112338,0 16px 36px #03091666;border-radius:8px;overflow:hidden;background:#29483d}
-canvas{display:block;width:100%;height:100%;aspect-ratio:15/13;user-select:none;-webkit-user-select:none;touch-action:none}
-#result-mark:not([hidden]){display:grid;place-items:center;position:absolute;inset:0;background:#06101acc;font-size:clamp(48px,13vw,94px);font-weight:1000;letter-spacing:.08em;text-shadow:0 4px 25px #020a13}
-#result-mark[data-result=win]{color:#79dcff}#result-mark[data-result=lose]{color:#ff9393}#result-mark[data-result=draw]{color:#fff0a4}
-#message{font-size:12px;line-height:1.5;color:#b9cbde;margin:11px 0 0;min-height:20px;font-weight:600}
-.legend{display:flex;gap:14px;font-size:11px;color:#adbed0;align-items:center;margin-top:6px}
-.dot{width:9px;height:9px;display:inline-block;border-radius:50%;margin-right:5px;background:var(--blue)}.dot.red{background:var(--red)}
-.control-panel{border:1px solid #334b61;border-radius:14px;padding:14px;background:#142235;box-shadow:0 12px 30px #0003}
-.controls{display:flex;align-items:center;justify-content:space-around;gap:10px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
-/* Thumb-operated virtual analog stick: the knob follows the finger;
-   the original grid game still receives four-way directions. */
-.stick-wrap{display:grid;justify-items:center;align-items:center;gap:8px}
-.joystick{position:relative;width:162px;height:162px;flex:none;border-radius:50%;border:2px solid #587d9b;background:radial-gradient(circle at 44% 36%,#324d69 0%,#1d324a 57%,#0e1c2d 100%);box-shadow:inset 0 5px 18px #050b17b0,0 5px 15px #0006;touch-action:none;overscroll-behavior:contain;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;cursor:grab}
-.joystick.active{border-color:#6baee0;cursor:grabbing}
-.joystick::before{content:"";position:absolute;inset:22%;border:1px solid #4f749250;border-radius:50%;pointer-events:none}
-.stick-knob{position:absolute;left:50%;top:50%;width:70px;height:70px;border-radius:50%;transform:translate(-50%,-50%);background:radial-gradient(circle at 32% 26%,#7699b5,#365674 63%,#203650 100%);border:2px solid #80a1b7;box-shadow:0 4px 12px #030915b8,inset 0 2px 3px #d3e8ff3d;pointer-events:none;will-change:transform;touch-action:none}
-.stick-knob::before{content:"";position:absolute;inset:22px;border-radius:50%;background:#b1cfe5a8;box-shadow:0 0 0 5px #e0f0ff1c}
-.joystick .mark{position:absolute;color:#a1bed5;font-size:15px;line-height:1;pointer-events:none;user-select:none}
-.joystick .mark-up{top:9px;left:50%;transform:translateX(-50%)}
-.joystick .mark-down{bottom:9px;left:50%;transform:translateX(-50%)}
-.joystick .mark-left{left:9px;top:50%;transform:translateY(-50%)}
-.joystick .mark-right{right:9px;top:50%;transform:translateY(-50%)}
-.stick-label{font-size:12px;color:#d7e4ee;font-weight:900}
-.bomb-wrap{display:grid;justify-items:center;gap:9px;align-items:center}
-.bomb{width:100px;height:100px;border-radius:50%;background:radial-gradient(circle at 30% 25%,#ffbd7c,#f76d40 48%,#b83630 90%);border:3px solid #ffc08f;color:#291419;font-size:20px;font-weight:1000;box-shadow:0 6px 0 #612f25,0 10px 22px #0b1118}
-.bomb.pressed,.bomb:active{transform:translateY(5px);box-shadow:0 1px 0 #612f25;background:#ffa05e}
-.bomb-label{font-size:12px;color:#d7e4ee;font-weight:900}
-.actions{display:flex;justify-content:flex-end;align-items:center;margin:0 0 28px;min-height:38px}
-#restart{width:auto;min-width:132px;border:1px solid #567fa3;border-radius:10px;background:#24517a;padding:10px 15px;font:inherit;font-size:13px;font-weight:800;color:white;cursor:pointer;touch-action:manipulation;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
-#restart:active{background:#3b6e97}
-.hint{color:#93aabd;font-size:11px;line-height:1.6;margin:11px 0 0}
-@media(max-width:710px){.shell{max-width:475px}.game-layout{grid-template-columns:minmax(0,1fr);gap:10px}.control-panel{border:0;background:transparent;box-shadow:none;padding:0 8px}.header{padding:7px 2px 9px}.controls{justify-content:space-between;gap:12px;max-width:370px;margin:0 auto}.joystick{width:min(42vw,162px);height:min(42vw,162px)}.stick-knob{width:44%;height:44%}.stick-knob::before{inset:32%}.bomb{width:min(25vw,100px);height:min(25vw,100px)}.actions{max-width:370px;margin:0 auto 22px}.hint{margin:7px auto 0;max-width:370px}#message{margin-top:8px}}
-@media(max-width:390px){.joystick{width:148px;height:148px}.bomb{width:89px;height:89px}.control-panel{padding:0 3px}.legend{margin-top:3px}#message{margin-top:6px}}
-@media(orientation:landscape) and (max-height:520px){body{padding-top:max(3px,env(safe-area-inset-top));padding-bottom:max(3px,env(safe-area-inset-bottom))}.shell{max-width:960px}.header{padding:4px 2px 7px}.game-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(200px,260px);gap:12px}.board{max-height:calc(100svh - 82px);width:auto;max-width:100%;margin:0 auto}.arena{display:flex;flex-direction:column;align-items:center}#message{min-height:0;margin:5px 0 0}.legend{display:none}.control-panel{align-self:center}.controls{gap:8px}.joystick{width:134px;height:134px}.stick-wrap{gap:4px}.stick-label{font-size:10px}.bomb{width:75px;height:75px;font-size:16px}.bomb-label{font-size:10px}.actions{margin:0 auto 13px}#restart{padding:8px 12px}.hint{margin:4px 0 0}}
-@media(max-height:680px) and (orientation:portrait){.hint{display:none}.legend{margin-top:3px}}
-@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+/* iPhone-first controls, still playable on desktop with the same file. */
+@media (min-width:800px) and (min-height:540px) {
+  main { max-width:980px; }
+  .brand { padding-bottom:14px; }
+  .brand .name { font-size:24px; }
+  .landscape-layout { display:grid;grid-template-columns:minmax(0,520px) minmax(320px,1fr);gap:22px;align-items:start; }
+  .game-column { min-width:0; }
+  .controls { gap:14px; }
+  .settings { margin-top:16px; }
+  #message { text-align:left; }
+}
 </style>
 </head>
-<body><main class="shell">
-<div class="header"><div class="brand"><h1>置きボン AI Lab</h1><span class="version">VS v18-LG5</span></div></div>
-<div class="game-layout">
-  <div class="arena">
-    <div class="board"><canvas id="game" width="480" height="416" aria-label="対戦フィールド。青があなた、赤がAI v18です"></canvas><div id="result-mark" hidden aria-hidden="true"></div></div>
-    <div id="message" role="status" aria-live="polite">対戦開始</div>
-    <div class="legend"><span><i class="dot"></i>青：あなた</span><span><i class="dot red"></i> <span id="opponent-legend">赤：AI v18-LG5</span></span></div>
-  </div>
-  <div class="control-panel">
-    <div class="actions"><button id="restart" type="button">↻ もう一度対戦</button></div>
-    <div class="controls" aria-label="タッチ操作">
-      <div class="stick-wrap">
-        <div class="joystick" id="move-stick" role="group" aria-label="移動スティック。指を置いて上下左右へ倒すと移動します">
-          <span class="mark mark-up" aria-hidden="true">▲</span><span class="mark mark-left" aria-hidden="true">◀</span>
-          <span class="mark mark-right" aria-hidden="true">▶</span><span class="mark mark-down" aria-hidden="true">▼</span>
-          <div class="stick-knob" id="stick-knob" aria-hidden="true"></div>
+<body>
+<main>
+  <div class="brand"><span class="name">v18-LG5</span><span class="version">VS CP</span></div>
+  <div class="landscape-layout">
+    <div class="game-column">
+      <div class="board"><canvas id="game" width="480" height="416" aria-label="v18-LG5 ゲーム盤面"></canvas></div>
+      <div id="message" role="status" aria-live="polite">対戦を開始します</div>
         </div>
-        <div class="stick-label">移動スティック</div>
+    <div class="controls-column">
+      <div class="controls" aria-label="タッチ操作">
+        <div id="joystick" class="joystick" role="application" aria-label="固定バーチャルスティック・押し続けて移動">
+          <div id="stick-thumb" class="stick-thumb"></div>
+        </div>
+        <button type="button" id="bomb-button" class="bomb-button" aria-label="爆弾を設置">BOMB</button>
       </div>
-      <div class="bomb-wrap"><button type="button" class="bomb" id="bomb-control" aria-label="爆弾を置く">BOMB</button><div class="bomb-label">爆弾を置く</div></div>
+      <section class="settings">
+        <div class="actions">
+          <button id="restart" type="button">再戦</button>
+        </div>
+      </section>
     </div>
-    <p class="hint">左スティックを指で倒して移動。中央に戻すと停止。爆弾ボタンと同時操作できます。PCは矢印キー／WASD・Space。</p>
   </div>
-</div>
 </main>
 <script>
 
-// The on-screen build label is sourced from this script, so replacing game.js
-// always shows the correct opponent even when the HTML is unchanged.
-const LG5_BUILD_VERSION = "v18-LG5";
+// "v18-LG5" is the game title (legacy milestone). Selectable AIs are
+// CP1, EC1, Stealth (invisible CP1), and Warp (EC1 plus teleport). "lane"/"ec"
+// internal IDs remain unchanged to preserve the existing AI logic.
 const LANE_BUILD_VERSION = "v4.4-CP1";
-let activeAiMode = 'lg5';
-let AI_BUILD_VERSION = LG5_BUILD_VERSION;
+const STEALTH_BUILD_VERSION = "Stealth";
+const WARP_BUILD_VERSION = "Warp";
+let activeAiMode = 'lane';
+let AI_BUILD_VERSION = LANE_BUILD_VERSION;
 // Parameter search alters only tactical prioritization / admission criteria.
 // Time-expanded bomb-escape verification and safety invariants are never tunable.
 // LAB_TUNING_START
@@ -106,11 +121,17 @@ function v63PressurePhase() {
   // 開幕から常にプレッシャーフェーズを維持する
   return true; 
 }
+// Display names only. Historical build IDs remain stable.
+function aiDisplayName() {
+  return activeAiMode === 'ec' ? 'EC'
+    : activeAiMode === 'stealth' ? 'Stealth'
+    : activeAiMode === 'warp' ? 'Warp' : 'CP';
+}
 function showOkibonBuildVersion() {
   const opponentTag = document.getElementById('opponent-version-tag');
-  if (opponentTag) opponentTag.textContent = '対戦相手 ' + AI_BUILD_VERSION;
+  if (opponentTag) opponentTag.textContent = '対戦相手 ' + aiDisplayName();
   const mobileBadge = document.querySelector('.brand .version');
-  if (mobileBadge) mobileBadge.textContent = 'VS ' + AI_BUILD_VERSION;
+  if (mobileBadge) mobileBadge.textContent = 'VS ' + aiDisplayName();
 }
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", showOkibonBuildVersion);
@@ -123,9 +144,6 @@ const ctx = canvas.getContext("2d");
 const message = document.getElementById("message");
 
 const heldKeys = new Set();
-// The on-screen stick has its own state, independent from keyboard input.
-let joystickDirection = null;
-let joystickPointerId = null;
 let playerMoveTimer = 0;
 const PLAYER_MOVE_INTERVAL = 120; // グリッド移動間隔（判定は従来どおり）
 const PLAYER_VISUAL_MOVE_MS = 105; // マス間の表示補間時間
@@ -143,7 +161,6 @@ const BOMB_FLAME_MS = 600;
 const V18_GIRI_MIN_CHAIN_MS = 320;
 const V18_GIRI_FAST_WINDOW_MS = 560;
 const V18_EDGE_RELAY_LATE_MS = 400;
-let v18GiriFastPlan = null;
 
 const gamepadKeys = new Set();
 let gamepadBombWasPressed = false;
@@ -180,19 +197,13 @@ let v69SurpriseRolls = new Map();
 let lastV69SurpriseAt = -Infinity;
 
 
-// Lightweight mobile edition: keep the original v18 AI and game clock,
-// but do not collect frames, events, or download any match records.
-let replayClock = 0;
-let replayBombId = 0;
-function replayLog() {}
-function replaySnapshot() {}
-function replayRecordDecision() {}
+// Only game-clock and bomb-identity state are required for gameplay.
+let matchClock = 0;
+let nextBombId = 0;
+// EC attack logic needs the latest two real player movements, not a replay log.
+let recentPlayerMoves = [];
 
 function resetGame() {
-  v58BreakoutCount=0;
-  v59EscapeRedirectCount=0;
-  v59EscapeCheckedCount=0;
-  v60RefugeRedirectCount=0;
   map = Array.from({ length: ROWS }, (_, y) =>
   Array.from({ length: COLS }, (_, x) => {
     // 外周の固い壁
@@ -253,7 +264,6 @@ function resetGame() {
   playerVisual = createVisualPosition(player.x, player.y);
   enemyVisual = createVisualPosition(enemy.x, enemy.y);
   enemyBombCooldown = 0;
-  v18GiriFastPlan = null;
   enemyMoveTimer = 0;
   lastTime = performance.now();
   enemyEscapeTarget = null;
@@ -282,21 +292,15 @@ function resetGame() {
   laneOpeningCompleted = false;
   laneHumanLastTile = -1;
   laneHumanStillAt = 0;
+  ecReset();
+  warpReset();
 
-  replayClock = 0;
-  replayBombId = 0;
-  heldKeys.clear();
-  gamepadKeys.clear();
-  joystickDirection = null;
-  joystickPointerId = null;
-  const stickEl = document.getElementById("move-stick");
-  const stickKnob = document.getElementById("stick-knob");
-  if (stickEl) stickEl.classList.remove("active");
-  if (stickKnob) stickKnob.style.transform = "translate(-50%, -50%)";
-  playerMoveTimer = 0;
-  message.textContent = `対戦中 — 青：あなた / 赤：${AI_BUILD_VERSION}`;
-  const resultMark = document.getElementById("result-mark");
-  if (resultMark) { resultMark.hidden = true; resultMark.textContent = ""; }
+  matchClock = 0;
+  nextBombId = 0;
+  recentPlayerMoves = [];
+  message.textContent = activeAiMode === "stealth"
+    ? "対戦中：青＝人間、Stealth＝透明なCP"
+    : `対戦中：青＝人間、${activeAiMode === "warp" ? "紫" : "赤"}＝${aiDisplayName()}`;
   if (typeof updateMatchStatus === "function") updateMatchStatus();
   draw();
 }
@@ -360,7 +364,8 @@ function movePlayer(dx, dy) {
     // Heading consistency is sampled when the AI makes its next decision.
     playerDirX = dx;
     playerDirY = dy;
-    replayLog("player_move", { x, y, dx, dy });
+    recentPlayerMoves.push({t:matchClock,x,y,dx,dy});
+    if (recentPlayerMoves.length > 2) recentPlayerMoves.shift();
   }
 }
 
@@ -443,7 +448,7 @@ function placeBomb() {
   }
 
   bombs.push({
-    replayId: ++replayBombId,
+    id: ++nextBombId,
     owner: "player", // v59: authoritative ownership, not just replay metadata
     x: player.x,
     y: player.y,
@@ -451,8 +456,8 @@ function placeBomb() {
     range: 8
   });
 
-  replayLog("bomb_placed", { id: replayBombId, owner: "player", x: player.x, y: player.y, timer: 2000, range: 8 });
-  replaySnapshot("bomb_placed");
+  void 0;
+  void 0;
   bombCooldown = BOMB_COOLDOWN_MS;
   bombInputBufferMs = 0;
   return true;
@@ -498,8 +503,8 @@ function enemyBombChainAmbush(proposedBomb) {
 // search confirms survival. This is conditional on the defender remaining
 // stationary; a human who reacts to the first bomb can still break the trap.
 function v72StationaryCorner() {
-  if(!player.alive || !enemy.alive || replayClock<1250 ||
-     replayClock-lastPlayerMoveAt<1100) return null;
+  if(!player.alive || !enemy.alive || matchClock<1250 ||
+     matchClock-lastPlayerMoveAt<1100) return null;
   const sx=player.x===1 ? 1 : player.x===COLS-2 ? -1 : 0;
   const sy=player.y===1 ? 1 : player.y===ROWS-2 ? -1 : 0;
   if(!sx || !sy) return null;
@@ -605,7 +610,7 @@ function findV18EdgeLaneRelay(events) {
   if(!player.alive || enemyBombCooldown>0 || bombs.length!==1 ||
      bombs[0].owner!=='enemy' || bombs[0].timer<V18_GIRI_MIN_CHAIN_MS ||
      bombs[0].timer>2000 ||
-     replayClock-lastPlayerMoveAt<ENEMY_STEP_MS*2) return null;
+     matchClock-lastPlayerMoveAt<ENEMY_STEP_MS*2) return null;
   const anchor=bombs[0];
   let target=null;
   if(player.y===1 && anchor.y===3)target={x:anchor.x,y:1};
@@ -642,7 +647,7 @@ function findV18EdgeLaneRelay(events) {
     }
   }
   if(!goal || anchor.timer-goal.dist*ENEMY_STEP_MS<V18_GIRI_MIN_CHAIN_MS)return null;
-  const relayInfo={anchorId:anchor.replayId,chainMs:Math.round(anchor.timer)};
+  const relayInfo={anchorId:anchor.id,chainMs:Math.round(anchor.timer)};
   if(!goal.first){
     if(anchor.timer<=V18_EDGE_RELAY_LATE_MS){
       const giri=findV18LGiriOkiBomb(events,relayInfo);
@@ -964,10 +969,8 @@ function getV64CounterTrapScore(newBomb, blastCells = null, context = undefined)
   return Math.min(20,score);
 }
 
-let v14LastBombReject = 'unknown';
-function v14BombReject(reason) {v14LastBombReject=reason;return null;}
+function v14BombReject(reason) { return null; }
 function evaluateEnemyBombSpot(x, y, playerOptions = null, precomputed = null) {
-  v14LastBombReject='not_checked';
   const v14OwnBombCount=bombs.filter(b=>b.owner==='enemy').length;
   const v14Followup=v14OwnBombCount>=2; // 3発目以降のみ緩和
   const v16Pressure=precomputed?.v16Pressure || null;
@@ -1265,101 +1268,45 @@ function evaluateEnemyBombSpot(x, y, playerOptions = null, precomputed = null) {
 function placeEnemyBomb(precheckedEvaluation = null) {
   if (gameOver || !enemy.alive || enemyBombCooldown > 0) return false;
   if (bombs.filter(b=>b.owner==='enemy').length>=8){
-    replayLog('ai_v14_bomb_rejected',{reason:'active_bomb_cap',ownBombs:8});
+    void 0;
     return false;
   }
   const evaluation=precheckedEvaluation || evaluateEnemyBombSpot(enemy.x,enemy.y);
   if(!evaluation){
     const own=bombs.filter(b=>b.owner==='enemy').length;
-    if(own>=2) replayLog('ai_v14_bomb_rejected',{
-      at:{x:enemy.x,y:enemy.y},ownBombs:own,
-      reason:v14LastBombReject,player:{x:player.x,y:player.y},
-      cooldownMs:enemyBombCooldown});
+    if(own>=2) void 0;
     return false;
   }
-  const newBomb = { ...evaluation.proposedBomb, replayId: ++replayBombId };
+  const newBomb = { ...evaluation.proposedBomb, id: ++nextBombId };
   bombs.push(newBomb);
-  if(evaluation.v18EdgeRelay)replayLog('ai_v18_edge_lane_relay',{
-    at:{x:newBomb.x,y:newBomb.y},player:{x:player.x,y:player.y},
-    anchorId:evaluation.v18EdgeRelay.anchorId,
-    chainMs:evaluation.v18EdgeRelay.chainMs,
-    robustExits:evaluation.robustExitCount});
-  if(evaluation.v18LGiri)replayLog('ai_v18_l_giri_oki',{
-    at:{x:newBomb.x,y:newBomb.y},player:{x:player.x,y:player.y},
-    ...evaluation.v18LGiri,robustExits:evaluation.robustExitCount});
-  if (evaluation.v18LCombo?.score>=15)replayLog('ai_v18_l_formation',{
-    at:{x:newBomb.x,y:newBomb.y},kind:evaluation.v18LCombo.kind,
-    score:evaluation.v18LCombo.score,newExits:evaluation.v18LCombo.newExits,
-    robustExits:evaluation.robustExitCount});
-  if(evaluation.v74CornerRelay) replayLog('ai_v74_corner_relay',{
-    at:{x:newBomb.x,y:newBomb.y},player:{x:player.x,y:player.y},
-    robustExits:evaluation.robustExitCount});
-  if(evaluation.v72VerifiedCounter) replayLog('ai_v72_verified_counter',{
-    at:{x:newBomb.x,y:newBomb.y},pressure:evaluation.pressure,
-    robustExits:evaluation.robustExitCount,trapRisk:evaluation.trapRisk});
-  if(evaluation.v72CornerClosure) replayLog('ai_v72_corner_closure',{
-    at:{x:newBomb.x,y:newBomb.y},player:{x:player.x,y:player.y},
-    robustExits:evaluation.robustExitCount,anchorRemainingMs:
-      bombs.find(b=>b!==newBomb&&b.owner==='enemy')?.timer||0});
+  if(evaluation.v18EdgeRelay)void 0;
+  if(evaluation.v18LGiri)void 0;
+  if (evaluation.v18LCombo?.score>=15)void 0;
+  if(evaluation.v74CornerRelay) void 0;
+  if(evaluation.v72VerifiedCounter) void 0;
+  if(evaluation.v72CornerClosure) void 0;
   if(evaluation.counterTrap>=13) {
-    replayLog('ai_v64_counter_trap', {
-      at:{x:newBomb.x,y:newBomb.y},score:evaluation.counterTrap,
-      offense:evaluation.offense.score,robustExits:evaluation.robustExitCount
-    });
+    void 0;
   }
   if(evaluation.controlledCrossfire && evaluation.realLinkedOwnBomb) {
-    replayLog('ai_v56_crossfire',{
-      at:{x:newBomb.x,y:newBomb.y},layeredAttack:evaluation.layeredAttack});
-    replayLog('ai_v61_human_volley',{
-      at:{x:newBomb.x,y:newBomb.y},layeredAttack:evaluation.layeredAttack,
-      robustExits:evaluation.robustExitCount});
+    void 0;
+    void 0;
   }
   if(isV68Interdiction(evaluation.offense)) {
-    replayLog('ai_v68_interdiction', {
-      at:{x:newBomb.x,y:newBomb.y},
-      heading:{dx:playerDirX,dy:playerDirY,streak:playerHeadingStreak},
-      projectedDepth:evaluation.offense.interdictionDepth,
-      lateralExitsCovered:evaluation.offense.interdictionLateral,
-      score:evaluation.offense.interdiction,
-      robustExits:evaluation.robustExitCount
-    });
+    void 0;
   }
   if(evaluation.v74OffsetVolley && evaluation.ownAnchorCount>0) {
-    replayLog('ai_v74_offset_volley',{
-      at:{x:newBomb.x,y:newBomb.y},player:{x:player.x,y:player.y},
-      newlyCoveredExits:evaluation.v74NovelExitCount,
-      robustExits:evaluation.robustExitCount});
+    void 0;
   }
   if(evaluation.v16Pressure){
-    replayLog('ai_v16_human_pressure_chain',{at:{x:newBomb.x,y:newBomb.y},
-      ...evaluation.v16Pressure,escape:{x:evaluation.escape.x,y:evaluation.escape.y}});
+    void 0;
   }
   if(evaluation.v69LateSurprise) {
-    lastV69SurpriseAt=replayClock;
-    replayLog('ai_v69_late_chain',{
-      at:{x:newBomb.x,y:newBomb.y},
-      anchorRemainingMs:Math.round(bombs.find(b=>b!==newBomb&&b.owner==='enemy')?.timer||0),
-      escape:{x:evaluation.escape.x,y:evaluation.escape.y},
-      robustExits:evaluation.robustExitCount,
-      trapRisk:evaluation.trapRisk});
+    lastV69SurpriseAt=matchClock;
+    void 0;
   }
-  replayLog("bomb_placed", { id:newBomb.replayId, owner:"enemy", x:newBomb.x,
-    y:newBomb.y, timer:newBomb.timer, range:newBomb.range,
-    pressure:evaluation.pressure, escape:evaluation.escape,
-    safeExitCount:evaluation.exits, robustExitCount:evaluation.robustExitCount,
-    trapRisk:evaluation.trapRisk,offense:evaluation.offense,
-    counterTrap:evaluation.counterTrap||0,
-    v69LateSurprise:!!evaluation.v69LateSurprise,
-    v16HumanPressure:!!evaluation.v16Pressure,
-    v72CornerClosure:!!evaluation.v72CornerClosure,
-    v72VerifiedCounter:!!evaluation.v72VerifiedCounter,
-    v74CornerRelay:!!evaluation.v74CornerRelay,
-    layeredAttack:evaluation.layeredAttack||0, v56Denial:evaluation.v56Denial||null,
-    v18LCombo:evaluation.v18LCombo||null,
-    v18LGiri:evaluation.v18LGiri||null,
-    v18EdgeRelay:evaluation.v18EdgeRelay||null,
-    positionRisk:getEnemyPositionRisk(newBomb.x,newBomb.y) });
-  replaySnapshot("bomb_placed");
+  void 0;
+  void 0;
   enemyEscapeTarget = null;
   enemyEscapeGoal = null;
   enemyBombCooldown = 100;
@@ -1388,12 +1335,12 @@ function explode(bomb) {
     }
   }
 
-  replayLog("bomb_exploded", { id: bomb.replayId, owner: bomb.owner || "player", x: bomb.x, y: bomb.y, cells });
+  void 0;
   flames.push({
     cells,
     timer: 600,
     owner: bomb.owner || 'player',
-    bombId: bomb.replayId
+    bombId: bomb.id
   });
 
   // 爆風が届いた爆弾を連鎖爆発させる
@@ -1972,10 +1919,7 @@ function findAdaptiveTimedSafeStep(startX, startY, diagnostics = null) {
   const finer = findTimedSafeStep(startX, startY, null, finerDiagnostics, 0, ENEMY_STEP_MS);
   if (finer) {
     if (diagnostics) Object.assign(diagnostics, finerDiagnostics);
-    replayLog('ai_fine_escape_found', {
-      at:{x:startX,y:startY}, step:finer,
-      activeBombs:bombs.length, timeStepMs:ENEMY_STEP_MS
-    });
+    void 0;
     return finer;
   }
   enemyEscapeGoal = savedGoal;
@@ -1988,7 +1932,7 @@ function findEnemyStaggeredEscape(baseStep=null,baseDiagnostics=null) {
   // An extra full-horizon search is expensive during a mass detonation.
   // Only sample one of every two decisions, when a realistic follow-up
   // would cause an early explosion rather than a distant hypothetical one.
-  if(Math.floor(replayClock / ENEMY_STEP_MS)%2 !== 0) return null;
+  if(Math.floor(matchClock / ENEMY_STEP_MS)%2 !== 0) return null;
   const timed=getTimedBombEvents();
   const earliest=Math.min(...timed.map(e=>e.time));
   if(earliest>1250 || earliest<120) return null;
@@ -2124,9 +2068,9 @@ function getPlayerReachableCells(maxDepth = 3) {
 // continues to require every full-horizon self-escape test below.
 let v56ReachCache=null;
 function getV56PlayerReachableArea(){
-  if(replayClock<V55_STALEMATE_MS || bombs.length>2 || !player.alive)return null;
+  if(matchClock<V55_STALEMATE_MS || bombs.length>2 || !player.alive)return null;
   const bombKey=bombs.map(b=>`${b.x}:${b.y}:${Math.ceil(b.timer/120)}`).join('|');
-  const key=`${replayClock}:${player.x}:${player.y}:${bombKey}`;
+  const key=`${matchClock}:${player.x}:${player.y}:${bombKey}`;
   if(v56ReachCache && v56ReachCache.key===key)return v56ReachCache.area;
   const area=getPlayerReachableCells(10);
   v56ReachCache={key,area};
@@ -2161,9 +2105,9 @@ function observePlayerMotionAtAiTick() {
     const dx=now.x-lastObservedPlayerPos.x,dy=now.y-lastObservedPlayerPos.y;
     if(Math.abs(dx)+Math.abs(dy)===1) {
       playerHeadingStreak=(dx===lastObservedHeading.dx &&
-        dy===lastObservedHeading.dy && replayClock-lastPlayerMoveAt<=390) ?
+        dy===lastObservedHeading.dy && matchClock-lastPlayerMoveAt<=390) ?
         Math.min(6,playerHeadingStreak+1) : 1;
-      lastPlayerMoveAt=replayClock;
+      lastPlayerMoveAt=matchClock;
       lastObservedHeading={dx,dy};
       playerDirX=dx;playerDirY=dy;
     } else if(dx!==0 || dy!==0) {
@@ -2179,7 +2123,7 @@ function observePlayerMotionAtAiTick() {
 // repeated. A stopped player must not be projected forever in the last
 // direction pressed. Predict at most three tiles, not a guaranteed path.
 function getRecentPlayerHeading() {
-  const age=replayClock-lastPlayerMoveAt;
+  const age=matchClock-lastPlayerMoveAt;
   return playerHeadingStreak>=2 && age>=0 && age<=390 &&
     (playerDirX!==0 || playerDirY!==0) ?
     {dx:playerDirX,dy:playerDirY,streak:playerHeadingStreak,age} : null;
@@ -2301,9 +2245,7 @@ function findV74AttackEscapeStep(chosen,diagnostics,events) {
     if(score>bestScore+2){best=p;bestScore=score;}
   }
   if((best.x!==chosen.x||best.y!==chosen.y)&&bestScore>old+13){
-    replayLog('ai_v74_assault_escape',{from:{x:enemy.x,y:enemy.y},
-      planned:chosen,to:best,scoreGain:Math.round(bestScore-old),
-      verifiedFirstSteps:viable.length});
+    void 0;
     return {x:best.x,y:best.y};
   }
   return chosen;
@@ -2486,9 +2428,7 @@ function chooseOffensiveEscapeStep(safeStep, diagnostics, events) {
     if(s>best.score+2.5)best={p,score:s};
   }
   if(best.p!==safeStep && best.score>oldScore+6) {
-    replayLog('ai_offensive_escape',{from:{x:enemy.x,y:enemy.y},
-       original:safeStep,to:best.p,scoreGain:Math.round((best.score-oldScore)*10)/10,
-       nextBombCooldown:enemyBombCooldown});
+    void 0;
     return {x:best.p.x,y:best.p.y};
   }
   return safeStep;
@@ -2515,7 +2455,7 @@ function v16ChainProfile(x,y,baselineEvents=null) {
     const b=bombs[i];
     if(Math.abs(trialEvents[i].time-detonate)>5 || baseline[i].time>detonate+5)continue;
     if(!getBlastCells(b).some(([a,c])=>a===x&&c===y))continue;
-    anchors.push({owner:b.owner||'player',id:b.replayId??null,time:Math.round(detonate)});
+    anchors.push({owner:b.owner||'player',id:b.id??null,time:Math.round(detonate)});
   }
   if(!anchors.length)return null;
   const newArea=new Set(trialBlast.map(([a,b])=>`${a},${b}`));
@@ -2736,7 +2676,7 @@ function findV18LGiriOkiBomb(currentEvents, edgeRelayInfo = null) {
       (targetInBlast?25:0)+(blocker?.kind==='soft'?24:0);
     if(!best||score>best.score)best={score,newExits,nearbyNew,
       blockedEdge,targetInBlast,alignedDistance:Number.isFinite(alignedDistance)?alignedDistance:null,
-      blocker,edgeDepth,anchorId:anchor.replayId,
+      blocker,edgeDepth,anchorId:anchor.id,
       chainMs:Math.round(time),anchorOwner:anchor.owner||'player'};
   }
   if(!best)return null;
@@ -2762,7 +2702,7 @@ function findV18LGiriOkiBomb(currentEvents, edgeRelayInfo = null) {
 
 function findV69LateSurpriseBomb() {
   if(!player.alive || enemyBombCooldown>0 || bombs.length!==1 ||
-     bombs[0].owner!=='enemy' || replayClock-lastV69SurpriseAt<17000)
+     bombs[0].owner!=='enemy' || matchClock-lastV69SurpriseAt<17000)
     return null;
   const anchor=bombs[0];
   if(anchor.timer<760 || anchor.timer>1050 ||
@@ -2783,7 +2723,7 @@ function findV69LateSurpriseBomb() {
   if(offense.pressure<6 || (!offense.hitNow && offense.threatenedExits<1 &&
      offense.leadHits<2))return null;
   // Only draw once for each anchor: do not let repeated ticks make it likely.
-  const key=anchor.replayId ?? anchor;
+  const key=anchor.id ?? anchor;
   if(!v69SurpriseRolls.has(key))v69SurpriseRolls.set(key,Math.random()<0.20);
   if(!v69SurpriseRolls.get(key))return null;
   const evaluation=evaluateEnemyBombSpot(enemy.x,enemy.y,options,{
@@ -2830,7 +2770,7 @@ function findV74VerifiedFollowup(events) {
 }
 
 function findEnemyCounterBomb(currentEvents) {
-  if(enemyBombCooldown>0 || replayClock-lastEnemyCounterBombAt<650) return null;
+  if(enemyBombCooldown>0 || matchClock-lastEnemyCounterBombAt<650) return null;
   if(bombs.filter(b=>b.owner==='enemy').length>=5) return null;
   const distance=Math.abs(enemy.x-player.x)+Math.abs(enemy.y-player.y);
   if(distance>6 || distance===0 || bombs.some(b=>b.x===enemy.x&&b.y===enemy.y))return null;
@@ -3031,7 +2971,7 @@ function findEnemyInterceptStep(currentAttackStep=null) {
   if(currentAttackStep && where(candidate)+1>=where(currentAttackStep))return null;
   // Require an interception to improve projected lane control, not just distance
   // to the opponent's extrapolated position. This reduces aimless pursuits.
-  if(currentAttackStep && replayClock>=V55_STALEMATE_MS){
+  if(currentAttackStep && matchClock>=V55_STALEMATE_MS){
     const proposed={...candidate,range:8,timer:2000};
     const attack={...currentAttackStep,range:8,timer:2000};
     if(getV56EscapeDenial(proposed).score + 2 < getV56EscapeDenial(attack).score)
@@ -3112,7 +3052,7 @@ function v18PursuitAllowed(here,p) {
      v18StrategicSafety.bombKey===v17BombFieldKey() &&
      v18StrategicSafety.viable.length===1 &&
      !v18StrategicSafety.viable.some(q=>q.x===p.x&&q.y===p.y))return false;
-  if(v18RetreatMemory && replayClock<v18RetreatMemory.until &&
+  if(v18RetreatMemory && matchClock<v18RetreatMemory.until &&
      p.x===v18RetreatMemory.from.x && p.y===v18RetreatMemory.from.y &&
      here.x===v18RetreatMemory.to.x && here.y===v18RetreatMemory.to.y)
      return false;
@@ -3375,15 +3315,13 @@ function chooseEnemyStrategicStep(proposed) {
         const base=scored.find(p=>p.x===survival.x&&p.y===survival.y);
         const choice=base && base.score<=scored[0].score+7?base:scored[0];
         best={...choice};
-        replayLog('ai_survival_override',{from:here,to:{x:best.x,y:best.y},
-          reason:'strategic_route_not_viable',viable:viable.length});
+        void 0;
       } else if(scored[0].score+18<exact.score &&
                 (scored[0].x!==here.x || scored[0].y!==here.y)) {
         // Even when both survive existing bombs, avoid a markedly easier
         // blockable edge or choke point when a safer flank is available.
         best={...scored[0]};
-        replayLog('ai_survival_override',{from:here,to:{x:best.x,y:best.y},
-          reason:'preserve_multiple_exits',viable:viable.length});
+        void 0;
       }
     }
   }
@@ -3431,8 +3369,7 @@ function chooseEnemyStrategicStep(proposed) {
         enemyEscapeGoal=savedGoal;
         if(path) {
           best=escapeCandidate;
-          replayLog('ai_preemptive_exit',{from:here,to:{x:best.x,y:best.y},
-            reason:'avoid_staggered_bomb_lock',activeBombs:bombs.length});
+          void 0;
         }
       }
     }
@@ -3456,8 +3393,7 @@ function chooseEnemyStrategicStep(proposed) {
        (outward.x!==here.x || outward.y!==here.y) &&
        (outward.x!==best.x || outward.y!==best.y) &&
        !isTileDangerDuring(outward.x,outward.y,0,ENEMY_STEP_MS+45,events)) {
-      replayLog('ai_reversal_prevented',{from:here,rejected:{x:best.x,y:best.y},
-        to:outward,playerBombCount:activePlayerBombs});
+      void 0;
       best={x:outward.x,y:outward.y,score:best.score,trapRisk:best.trapRisk};
     }
   }
@@ -3503,11 +3439,7 @@ function chooseEnemyStrategicStep(proposed) {
       // The opponent already occupies the next tile? The earlier
       // candidates/enemyCanMove gates cover that. Surviving all existing
       // fuses permits the forward move even if static-risk ranks it lower.
-      replayLog('ai_v15_pursuit_override',{
-        from:here,previousChoice:{x:best.x,y:best.y},
-        to:{x:advance.x,y:advance.y},player:{x:player.x,y:player.y},
-        reason:'safe_advance',playerDistance,hostileBombs:hostile,
-        ownBombs:bombs.length-hostile});
+      void 0;
       best={x:advance.x,y:advance.y,score:advance.score,trapRisk:0};
       applied=true;
       break;
@@ -3526,19 +3458,13 @@ function chooseEnemyStrategicStep(proposed) {
       const route=findTimedSafeStep(proposed.x,proposed.y,null,null,1);
       enemyEscapeGoal=savedGoal;
       if(route && v16HumanCounterBombSafe(proposed)){
-        replayLog('ai_v15_pursuit_override',{
-          from:here,previousChoice:{x:best.x,y:best.y},
-          to:{x:proposed.x,y:proposed.y},player:{x:player.x,y:player.y},
-          reason:'safe_flank',playerDistance,hostileBombs:hostile,
-          ownBombs:bombs.length-hostile});
+        void 0;
         best={x:proposed.x,y:proposed.y,score:0,trapRisk:0};
       }
     }
   }
   if(proposed && (best.x!==proposed.x||best.y!==proposed.y)) {
-    replayLog('ai_proactive_reposition',{
-      from:here,original:proposed,to:{x:best.x,y:best.y},
-      trapRisk:best.trapRisk,alternatives:debug});
+    void 0;
   }
   return {x:best.x,y:best.y};
 }
@@ -3558,7 +3484,7 @@ function v18ArbitrateFirstStep(from,proposed,events) {
     h.origin.x===from.x && h.origin.y===from.y && h.viable?.length>0;
   let hint=validHint(v18StrategicSafety)?v18StrategicSafety:
     validHint(v18ThreatSafety)?v18ThreatSafety:null;
-  const reversing=!!v18RetreatMemory && replayClock<v18RetreatMemory.until &&
+  const reversing=!!v18RetreatMemory && matchClock<v18RetreatMemory.until &&
     from.x===v18RetreatMemory.to.x && from.y===v18RetreatMemory.to.y &&
     proposed.x===v18RetreatMemory.from.x && proposed.y===v18RetreatMemory.from.y;
   // Compute a new full-time route only when an optional return to a freshly
@@ -3600,8 +3526,7 @@ function v18ArbitrateFirstStep(from,proposed,events) {
   }
   if(!selected || selected.x===proposed.x&&selected.y===proposed.y)
     return proposed;
-  replayLog('ai_v18_survival_lock',{from,rejected:proposed,to:selected,
-    reason,viableSteps:viable.length,hostileBombs:hostile});
+  void 0;
   return {x:selected.x,y:selected.y};
 }
 
@@ -3616,7 +3541,7 @@ function findEnemyPressureFlank(events = null) {
   const currentDistance=Math.abs(from.x-player.x)+Math.abs(from.y-player.y);
   if(currentDistance<2 || currentDistance>7)return null;
   // Do not run another expensive full-horizon search every 120ms.
-  if(Math.floor(replayClock / ENEMY_STEP_MS)%2 !== 0)return null;
+  if(Math.floor(matchClock / ENEMY_STEP_MS)%2 !== 0)return null;
   const timed=events||getTimedBombEvents();
   if(isTileDangerDuring(from.x,from.y,0,ENEMY_STEP_MS+45,timed))return null;
   const hereRisk=getEnemyPositionRisk(from.x,from.y);
@@ -3678,7 +3603,7 @@ function findV71ForwardPressureStep(origin,proposed,timed) {
   if(isTileDangerDuring(origin.x,origin.y,0,ENEMY_STEP_MS+45,timed))return null;
   // v73: inspect a forward opening every other tick rather than every third.
   // The full-horizon verifier still runs only for the strongest candidate.
-  if(Math.floor(replayClock/ENEMY_STEP_MS)%2!==0)return null;
+  if(Math.floor(matchClock/ENEMY_STEP_MS)%2!==0)return null;
   const originalRisk=getEnemyPositionRisk(origin.x,origin.y);
   const options=[];
   for(const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
@@ -3721,7 +3646,7 @@ function findV71ForwardPressureStep(origin,proposed,timed) {
 // adjacent tile gives materially better coverage of the opponent's likely
 // escape region. This NEVER permits placing an otherwise rejected bomb.
 function findV56ContainmentStep(desired,attackStep){
-  if(replayClock<V55_STALEMATE_MS || bombs.length!==0 || !player.alive)return null;
+  if(matchClock<V55_STALEMATE_MS || bombs.length!==0 || !player.alive)return null;
   const here={x:enemy.x,y:enemy.y};
   const distance=Math.abs(here.x-player.x)+Math.abs(here.y-player.y);
   if(distance<3 || distance>10)return null;
@@ -3760,7 +3685,6 @@ function findV56ContainmentStep(desired,attackStep){
 // within ~1s) trapping the AI against an outer lane. Detect the *onset* of
 // this pattern. This is a soft tactical search; real explosions and the
 // full-horizon survival planner remain authoritative.
-let v58BreakoutCount=0;
 function findV58EncirclementBreakout() {
   if(!player.alive || !enemy.alive)return null;
   const hostile=bombs.filter(b=>b.owner==='player');
@@ -3865,8 +3789,6 @@ function findV58EncirclementBreakout() {
 // first steps, use the player's NEXT plausible bomb to rank those routes.
 // Hypothetical placements NEVER become obstacles or override a real-bomb
 // survival failure; every redirect is revalidated against actual explosions.
-let v59EscapeRedirectCount=0;
-let v59EscapeCheckedCount=0;
 function findV59SaferEscapeStep(chosen, escapeDiagnostics) {
   const hostile=bombs.filter(b=>b.owner==='player');
   if (!chosen || hostile.length===0 || hostile.length>9 || !player.alive) return chosen;
@@ -3878,12 +3800,9 @@ function findV59SaferEscapeStep(chosen, escapeDiagnostics) {
   const viable=(escapeDiagnostics?.viableFirstSteps||[]).filter(p=>p &&
     !isTileDangerDuring(p.x,p.y,0,ENEMY_STEP_MS+45,events));
   if (viable.length<2) {
-    if (hostile.length>=2) replayLog('ai_v59_escape_assessment',
-      {status:'no_alternative',hostileBombs:hostile.length,
-       viableSteps:viable.length,from:{x:enemy.x,y:enemy.y}});
+    if (hostile.length>=2) void 0;
     return chosen;
   }
-  v59EscapeCheckedCount++;
   const reach=getPlayerReachableCells(3).filter(p=>p.depth<=3 &&
     !bombs.some(b=>b.x===p.x&&b.y===p.y));
   // Score the *worst plausible single follow-up* and an additional second
@@ -3939,18 +3858,13 @@ function findV59SaferEscapeStep(chosen, escapeDiagnostics) {
        (chosen.x!==enemy.x || chosen.y!==enemy.y) &&
        p.x===enemyLastPosition.x && p.y===enemyLastPosition.y &&
        (chosen.x!==p.x || chosen.y!==p.y)) {
-      replayLog('ai_v70_escape_reverse_veto',{
-        from:{x:enemy.x,y:enemy.y},planned:chosen,rejected:p,
-        hostileBombs:hostile.length});
+      void 0;
       continue;
     }
     if(hostile.length>=2 && distance<=8 &&
        p.x===enemy.x && p.y===enemy.y &&
        (chosen.x!==enemy.x || chosen.y!==enemy.y)) {
-      replayLog('ai_v67_escape_wait_veto',{
-        from:{x:enemy.x,y:enemy.y},planned:chosen,hostileBombs:hostile.length,
-        speculativeRiskImprovement:Math.round((oldScore-entry.score)*10)/10
-      });
+      void 0;
       continue;
     }
     checked++;
@@ -3964,16 +3878,9 @@ function findV59SaferEscapeStep(chosen, escapeDiagnostics) {
   enemyEscapeGoal=savedGoal;
   const outcome=accepted?'redirect':ordered.length && ordered[0].score<oldScore-8 ?
     'alternative_not_verified':'insufficient_improvement';
-  if(hostile.length>=2 || accepted)replayLog('ai_v59_escape_assessment',{
-    status:outcome,hostileBombs:hostile.length,viableSteps:viable.length,
-    selected:chosen,selectedRisk:Math.round(oldScore*10)/10,
-    alternative:ordered.length?ordered[0].p:null,
-    alternativeRisk:ordered.length?Math.round(ordered[0].score*10)/10:null});
+  if(hostile.length>=2 || accepted)void 0;
   if(!accepted)return chosen;
-  v59EscapeRedirectCount++;
-  replayLog('ai_v59_escape_redirect',{from:{x:enemy.x,y:enemy.y},
-    original:chosen,to:accepted.p,improvement:Math.round((oldScore-accepted.score)*10)/10,
-    hostileBombs:hostile.length,viableSteps:viable.length});
+  void 0;
   return accepted.p;
 }
 
@@ -3985,7 +3892,6 @@ function findV59SaferEscapeStep(chosen, escapeDiagnostics) {
 // Speculative bombs never become hard obstacles: candidates must first survive
 // the actual bomb timeline via findTimedSafeStep, and large score improvements
 // are required to override the established v59 route.
-let v60RefugeRedirectCount=0;
 function findV60ResilientRefugeStep(origin, selected, escapeDiagnostics, events) {
   if (!player.alive || !selected) return selected;
   const hostile=bombs.filter(b=>b.owner==='player');
@@ -4066,13 +3972,7 @@ function findV60ResilientRefugeStep(origin, selected, escapeDiagnostics, events)
   const verified=findTimedSafeStep(best.x,best.y,null,null,1);
   enemyEscapeGoal=savedGoal;
   if(!verified)return selected;
-  v60RefugeRedirectCount++;
-  replayLog('ai_v60_refuge_redirect',{
-    from:origin,original:selected,to:{x:best.x,y:best.y},
-    oldScore:Math.round(original.score*10)/10,
-    newScore:Math.round(replacement.score*10)/10,
-    originalRecovery:original.minimum,newRecovery:replacement.minimum,
-    plausiblePlacements:placements.length,realBombs:bombs.length});
+  void 0;
   return {x:best.x,y:best.y};
 }
 
@@ -4099,24 +3999,19 @@ function moveEnemyAI() {
   const attackStep = findBestTacticalAttackStep();
   // v63: During early play, a verified attack destination outranks a
   // speculative intercept. Otherwise offensive planting can stall entirely.
-  const interceptStep=attackStep && replayClock<V55_STALEMATE_MS ?
+  const interceptStep=attackStep && matchClock<V55_STALEMATE_MS ?
     null : findEnemyInterceptStep(attackStep);
   const approach=(attackStep||interceptStep)?null:findApproachStep();
   const desired=interceptStep||attackStep||approach;
-  if(interceptStep) replayLog('ai_v56_intercept',{
-    from:{x:enemy.x,y:enemy.y},to:interceptStep,
-    player:{x:player.x,y:player.y},heading:{x:playerDirX,y:playerDirY}});
+  if(interceptStep) void 0;
   const containmentStep=findV56ContainmentStep(desired,attackStep);
   const chosen=chooseEnemyStrategicStep(containmentStep||desired);
   if(containmentStep && chosen && chosen.x===containmentStep.x &&
-      chosen.y===containmentStep.y) replayLog('ai_v56_containment',{
-    from:{x:enemy.x,y:enemy.y},to:{x:chosen.x,y:chosen.y},
-    deniedScore:containmentStep.deniedScore,
-    improvement:containmentStep.improvement});
+      chosen.y===containmentStep.y) void 0;
   if(chosen) {
     enemy.x=chosen.x;
     enemy.y=chosen.y;
-    if(!attackStep) replayLog("ai_reposition", {to:chosen, reason:"no_valid_bomb_spot"});
+    if(!attackStep) void 0;
   }
 }
 
@@ -4466,7 +4361,7 @@ function laneShelterPlan(proof) {
   return {steps,index:0,signature:laneBombSignature()};
 }
 function laneBombSignature(){
-  return bombs.map(b=>`${b.replayId}:${b.x}:${b.y}`).join('|');
+  return bombs.map(b=>`${b.id}:${b.x}:${b.y}`).join('|');
 }
 
 function laneBfsDistances(tx,ty){
@@ -4510,7 +4405,7 @@ function lanePressureScore(x,y) {
 // A corner lane leaves little room to dodge human bombs from the flank.
 // Stay several tiles from the human; this is not a direct chase.
 function laneOpeningGoal() {
-  if(laneOpeningCompleted || replayClock>5200) return null;
+  if(laneOpeningCompleted || matchClock>5200) return null;
   const hd=Math.abs(enemy.x-player.x)+Math.abs(enemy.y-player.y);
   if(hd<9){laneOpeningCompleted=true;return null;}
   if(laneOpeningAnchor){
@@ -4550,7 +4445,7 @@ function laneCounterTrapPenalty(x,y) {
   let penalty=borderDepth===0?29:borderDepth===1?10:0;
   if(exits<=2)penalty+=8;
   // In the first few seconds, avoid funneling into a predictable edge lane.
-  if(replayClock<4400 && borderDepth===0)penalty+=11;
+  if(matchClock<4400 && borderDepth===0)penalty+=11;
   return penalty;
 }
 
@@ -4564,9 +4459,9 @@ function laneChooseGoal() {
     if(degree<2 || !laneAttackSiteAllowed(x,y))continue;
     const humanDist=Math.abs(x-player.x)+Math.abs(y-player.y);
     if(humanDist<3)continue;
-    const since=replayClock-(laneBombHistory.get(t)??-Infinity);
+    const since=matchClock-(laneBombHistory.get(t)??-Infinity);
     if(since<LANE_SITE_REUSE_MS)continue;
-    const visitAgo=replayClock-(laneVisits.get(t)??-Infinity);
+    const visitAgo=matchClock-(laneVisits.get(t)??-Infinity);
     const visitPenalty=Math.max(0,2200-visitAgo)/360;
     const band=Math.max(-12,13-Math.abs(humanDist-5)*3.6);
     const attack=lanePressureScore(x,y);
@@ -4592,14 +4487,14 @@ function lanePickMove(choices, justPlaced=false) {
   if(staging){laneGoal=staging;}
   else if(!laneGoal || !laneWalk(laneGoal.x,laneGoal.y) ||
      (laneGoal.x===enemy.x&&laneGoal.y===enemy.y) ||
-     (replayClock-(laneBombHistory.get(laneKey(laneGoal.x,laneGoal.y))??-Infinity)<LANE_SITE_REUSE_MS))
+     (matchClock-(laneBombHistory.get(laneKey(laneGoal.x,laneGoal.y))??-Infinity)<LANE_SITE_REUSE_MS))
     laneGoal=laneChooseGoal();
   const d=laneGoal?laneBfsDistances(laneGoal.x,laneGoal.y):null;
   let best=null;
   for(const p of pool){
     const t=laneKey(p.x,p.y);
     const waiting=p.x===enemy.x&&p.y===enemy.y;
-    const traveled=replayClock-(laneVisits.get(t)??-Infinity);
+    const traveled=matchClock-(laneVisits.get(t)??-Infinity);
     const playerDist=Math.abs(p.x-player.x)+Math.abs(p.y-player.y);
     let score=laneDegree(p.x,p.y)*0.6;
     if(d && d[t]>=0)score-=d[t]*2.2;
@@ -4708,10 +4603,10 @@ function laneTryPlace() {
   if(isTileDangerDuring(enemy.x,enemy.y,0,780,nearEvents))return null;
   const humanDist=Math.abs(enemy.x-player.x)+Math.abs(enemy.y-player.y);
   const posKey=laneKey(enemy.x,enemy.y);
-  const recent=replayClock-(laneBombHistory.get(posKey)??-Infinity);
+  const recent=matchClock-(laneBombHistory.get(posKey)??-Infinity);
   const ownCount=bombs.filter(b=>b.owner==='enemy').length;
   const degree=laneDegree(enemy.x,enemy.y);
-  if(enemyBombCooldown>0 || replayClock-laneLastBombAt<LANE_BOMB_INTERVAL ||
+  if(enemyBombCooldown>0 || matchClock-laneLastBombAt<LANE_BOMB_INTERVAL ||
      ownCount>=6 || recent<LANE_SITE_REUSE_MS || degree<2 ||
      !laneAttackSiteAllowed(enemy.x,enemy.y) ||
      laneOccupied(enemy.x,enemy.y) || humanDist<=2)return null;
@@ -4726,28 +4621,28 @@ function laneTryPlace() {
   if(humanDist<=6 && ownCount>=2 && options.length<2)return null;
   const next=lanePickMove(options,true);
   if(!next)return null;
-  const bomb={...candidate,replayId:++replayBombId};
+  const bomb={...candidate,id:++nextBombId};
   bombs.push(bomb);
-  laneLastBombAt=replayClock;
-  laneBombHistory.set(posKey,replayClock);
+  laneLastBombAt=matchClock;
+  laneBombHistory.set(posKey,matchClock);
   enemyBombCooldown=320;
   laneGoal=null;
   laneCommittedRoute=laneMakeRoute(next,proof);
   if(laneCommittedRoute)laneCommittedRoute.signature=laneBombSignature();
   const from={x:enemy.x,y:enemy.y};
   enemy.x=next.x;enemy.y=next.y;
-  laneVisits.set(laneKey(enemy.x,enemy.y),replayClock);
-  replayLog('bomb_placed',{id:bomb.replayId,owner:'enemy',x:bomb.x,y:bomb.y,timer:2000,range:8,policy:'lane_pressure_v4'});
-  replayLog('lane_bomb_placed',{x:bomb.x,y:bomb.y,kind:degree>=4?'junction':'corridor',ownCount:ownCount+1,humanDistance:humanDist});
-  replaySnapshot('bomb_placed');
+  laneVisits.set(laneKey(enemy.x,enemy.y),matchClock);
+  void 0;
+  void 0;
+  void 0;
   return from;
 }
 
 function laneFinishThink(from,action,extra={}) {
   enemyVisual=animateVisualPosition(enemyVisual,enemy.x,enemy.y,ENEMY_VISUAL_MOVE_MS);
-  replayLog('enemy_step',{from,to:{x:enemy.x,y:enemy.y},...extra});
-  replayRecordDecision(action,{from,to:{x:enemy.x,y:enemy.y},activeBombs:bombs.length});
-  replaySnapshot('ai_tick');
+  void 0;
+  void 0;
+  void 0;
   enemyMoveTimer=ENEMY_THINK_INTERVAL;
 }
 
@@ -4805,7 +4700,7 @@ const LANE_EDGE_GIRI_MAX_MS=960;
 const LANE_EDGE_GIRI_IDLE_MS=650;
 function laneEdgeHumanEligible(){
   return player.alive && laneSiteDepth(player.x,player.y)===0 &&
-    replayClock-laneHumanStillAt>=LANE_EDGE_GIRI_IDLE_MS;
+    matchClock-laneHumanStillAt>=LANE_EDGE_GIRI_IDLE_MS;
 }
 function laneEdgeGiriAnchor(x,y,events){
   if(!laneWalk(x,y) || laneSiteDepth(x,y)!==0 || laneOccupied(x,y))return null;
@@ -4819,7 +4714,7 @@ function laneEdgeGiriAnchor(x,y,events){
     const bomb=bombs[i],event=events[i];
     if(bomb.owner!=='enemy' || event.time<=0 || event.time>2100)continue;
     if(!event.cells.some(([a,b])=>a===x&&b===y))continue;
-    if(!best||event.time<best.time)best={id:bomb.replayId,time:event.time};
+    if(!best||event.time<best.time)best={id:bomb.id,time:event.time};
   }
   return best;
 }
@@ -4827,7 +4722,7 @@ function laneEdgeGiriTryPlant(events) {
   if(!laneEdgeHumanEligible() || laneSiteDepth(enemy.x,enemy.y)!==0 ||
     laneCommittedRoute && laneCommittedRoute.index<laneCommittedRoute.steps.length ||
     enemyBombCooldown>0 || bombs.filter(b=>b.owner==='enemy').length>=6 ||
-    replayClock-(laneBombHistory.get(laneKey(enemy.x,enemy.y))??-Infinity)<LANE_SITE_REUSE_MS)return null;
+    matchClock-(laneBombHistory.get(laneKey(enemy.x,enemy.y))??-Infinity)<LANE_SITE_REUSE_MS)return null;
   const anchor=laneEdgeGiriAnchor(enemy.x,enemy.y,events);
   if(!anchor||anchor.time<LANE_EDGE_GIRI_MIN_MS||anchor.time>LANE_EDGE_GIRI_MAX_MS)return null;
   // Work with the actual chain graph, not just the anchor's displayed timer.
@@ -4847,23 +4742,20 @@ function laneEdgeGiriTryPlant(events) {
     if(!winner||score>winner.score)winner={p,route,score};
   }
   if(!winner)return null;
-  const bomb={...candidate,replayId:++replayBombId};
+  const bomb={...candidate,id:++nextBombId};
   bombs.push(bomb);
-  laneLastBombAt=replayClock;
-  laneBombHistory.set(laneKey(enemy.x,enemy.y),replayClock);
+  laneLastBombAt=matchClock;
+  laneBombHistory.set(laneKey(enemy.x,enemy.y),matchClock);
   enemyBombCooldown=320;
   laneGoal=null;
   laneCommittedRoute=winner.route;
   laneCommittedRoute.signature=laneBombSignature();
   const from={x:enemy.x,y:enemy.y};
   enemy.x=winner.p.x;enemy.y=winner.p.y;
-  laneVisits.set(laneKey(enemy.x,enemy.y),replayClock);
-  replayLog('bomb_placed',{id:bomb.replayId,owner:'enemy',x:bomb.x,y:bomb.y,
-    timer:2000,range:8,policy:'lane_edge_giri_v44'});
-  replayLog('lane_edge_giri',{x:bomb.x,y:bomb.y,anchor:anchor.id,chainMs:linked,
-    safeFirstExits:options.length,player:{x:player.x,y:player.y},
-    escape:winner.p});
-  replaySnapshot('bomb_placed');
+  laneVisits.set(laneKey(enemy.x,enemy.y),matchClock);
+  void 0;
+  void 0;
+  void 0;
   return from;
 }
 // Time-aware short approach to a bomb-relay site. Do not blindly enter the
@@ -4913,11 +4805,11 @@ function laneEdgeGiriApproach(events){
 
 function laneThink() {
   const from={x:enemy.x,y:enemy.y};
-  laneVisits.set(laneKey(enemy.x,enemy.y),replayClock);
+  laneVisits.set(laneKey(enemy.x,enemy.y),matchClock);
   const observedHuman=laneKey(player.x,player.y);
   if(laneHumanLastTile!==observedHuman){
     laneHumanLastTile=observedHuman;
-    laneHumanStillAt=replayClock;
+    laneHumanStillAt=matchClock;
   }
   const currentSignature=laneBombSignature();
   // New bombs (particularly human bombs) force a complete re-check; an
@@ -4933,7 +4825,7 @@ function laneThink() {
     if(possible.some(p=>p.x===committed.x&&p.y===committed.y)){
       enemy.x=committed.x;enemy.y=committed.y;
       laneCommittedRoute.index++;
-      laneVisits.set(laneKey(enemy.x,enemy.y),replayClock);
+      laneVisits.set(laneKey(enemy.x,enemy.y),matchClock);
       laneFinishThink(from,'lane_committed_escape',{planted:false,committed:true});
       return;
     }
@@ -4950,8 +4842,8 @@ function laneThink() {
       const next=shelter.steps[0];
       enemy.x=next.x;enemy.y=next.y;
       laneCommittedRoute={...shelter,index:1,shelter:true};
-      laneVisits.set(laneKey(enemy.x,enemy.y),replayClock);
-      replayLog('lane_shelter_escape',{from,to:next,length:shelter.steps.length});
+      laneVisits.set(laneKey(enemy.x,enemy.y),matchClock);
+      void 0;
       laneFinishThink(from,'lane_shelter_escape',{planted:false});
       return;
     }
@@ -4968,9 +4860,8 @@ function laneThink() {
     const e=edgeApproach.first;
     enemy.x=e.x;enemy.y=e.y;
     laneGoal=null;
-    laneVisits.set(laneKey(enemy.x,enemy.y),replayClock);
-    replayLog('lane_edge_giri_approach',{from,to:e,target:{x:edgeApproach.x,y:edgeApproach.y},
-      anchor:edgeApproach.anchor.id,expectedChainMs:edgeApproach.arrivalMs});
+    laneVisits.set(laneKey(enemy.x,enemy.y),matchClock);
+    void 0;
     laneFinishThink(from,'lane_edge_giri_approach',{planted:false});
     return;
   }
@@ -4993,17 +4884,967 @@ function laneThink() {
     // rather than a local mobility heuristic that repeatedly chose WAIT.
     const desperate=laneLastResortStep(proof);
     if(desperate){enemy.x=desperate.x;enemy.y=desperate.y;}
-    replayLog('lane_emergency',{from,to:{x:enemy.x,y:enemy.y},
-      survivalSteps:desperate?.survivalSteps??0});
+    void 0;
     laneCommittedRoute=null;
   }
-  laneVisits.set(laneKey(enemy.x,enemy.y),replayClock);
+  laneVisits.set(laneKey(enemy.x,enemy.y),matchClock);
   laneFinishThink(from,'lane_pressure_patrol',{planted:false});
+}
+
+// ================================================================
+// EC1 / Escape Cut: a third, independent positional-closure policy.
+// LG5 and CP1 decision functions above are intentionally unchanged.
+// The safety planner is reused, but EC1 owns target selection and
+// placement scoring: minimize the human's time-expanded escape space.
+// ================================================================
+const EC_BUILD_VERSION = 'v3.1-EC1';
+const EC_DIRS = [[0,-1],[1,0],[0,1],[-1,0],[0,0]];
+const EC_HORIZON = 25; // 3.0 seconds: bomb fuse + full flame + margin
+let ecGoal = null;
+let ecRoute = null;
+let ecSites = new Map();
+let ecVisits = new Map();
+let ecLastPlaced = -Infinity;
+let ecSweepGuardUntil = -Infinity;
+let ecPlan = null;
+let ecPlanAt = -Infinity;
+let ecPlanSignature = '';
+let ecDecisionCount = 0;
+let ecMirror = null;
+let ecMirrorLastTry = -Infinity;
+let ecMirrorLastDone = -Infinity;
+let ecChainStrikeLast=-Infinity;
+let ecChainStageLast=-Infinity;
+// Joining *existing player and EC1 bombs* may deliberately clear a hostile
+// multi-bomb field early. Score the change in ORIGINAL bomb detonation times;
+// a new 2-second-fuse bomb is not itself a "reset". This is separate from
+// checking whether our extra blast directly cuts the human's escape routes.
+function ecChainResetScore(before,after){
+  if(!bombs.some(b=>b.owner==='player') || !bombs.some(b=>b.owner==='enemy'))
+    return null;
+  let acceleratedPlayer=0, acceleratedOwn=0, relieved=0, closeRelieved=0;
+  let oldEnd=0, newEnd=0;
+  for(let i=0;i<bombs.length;i++){
+    const b=bombs[i],dist=Math.abs(b.x-enemy.x)+Math.abs(b.y-enemy.y);
+    if(b.owner==='player' && dist<=8){
+      oldEnd=Math.max(oldEnd,before[i].time+BOMB_FLAME_MS);
+      newEnd=Math.max(newEnd,after[i].time+BOMB_FLAME_MS);
+    }
+    const delta=before[i].time-after[i].time;
+    if(delta<260)continue;
+    if(b.owner==='player') acceleratedPlayer++;
+    else if(b.owner==='enemy') acceleratedOwn++;
+    const weight=dist<=7?1:0.25;
+    relieved+=Math.min(1400,delta)*weight;
+    if(dist<=7)closeRelieved+=Math.min(1400,delta);
+  }
+  // At least one existing opponent bomb must actually be cleared earlier.
+  // Accelerating only our own bomb merely adds tactical danger.
+  if(acceleratedPlayer<1 || closeRelieved<350)return null;
+  const cleaned=Math.max(0,oldEnd-newEnd);
+  if(cleaned<200 && closeRelieved<750)return null;
+  // Avoid detonating a large hostile array too early in EC1's own vicinity:
+  // complete escape proof and counterbomb validation follow this score.
+  return {score:Math.min(15,relieved/180)+Math.min(14,cleaned/130)+
+    Math.min(5,acceleratedPlayer*1.5)+(acceleratedOwn?3:0),
+    acceleratedPlayer,acceleratedOwn,cleaned,relieved};
+}
+function ecChainStrikeEvaluate(attackDelay=0){
+  if(enemyBombCooldown>attackDelay || matchClock-ecLastPlaced<410-attackDelay ||
+     bombs.length<1 || bombs.length>=9 || ecDist(enemy.x,enemy.y)<2 ||
+     ecDist(enemy.x,enemy.y)>12 || laneOccupied(enemy.x,enemy.y))return null;
+  const timed=getTimedBombEvents();
+  const candidate={x:enemy.x,y:enemy.y,range:8,timer:2000,owner:'enemy'};
+  // 'Giri-oki' must genuinely link to an older bomb. The candidate alone
+  // does not improve its fuse when nothing will trigger it.
+  let lead=Infinity;
+  for(const event of timed){
+    if(event.time<235 || event.time>1125)continue;
+    if(event.cells.some(([x,y])=>x===enemy.x&&y===enemy.y))
+      lead=Math.min(lead,event.time);
+  }
+  if(lead===Infinity)return null;
+  const combined=getTimedBombEvents(candidate);
+  const arrival=combined[combined.length-1].time;
+  if(arrival>1125||arrival<230)return null;
+  const blast=getBlastCells(candidate);
+  const hitsNow=blast.some(([x,y])=>x===player.x&&y===player.y);
+  const near=blast.some(([x,y])=>Math.abs(x-player.x)+Math.abs(y-player.y)<=1);
+  const reset=ecChainResetScore(timed,combined);
+    // Giri-oki is also a tempo attack.  When an existing blast instantly
+    // triggers this new bomb, threatening the human or their next two moves
+    // can force a dodge or interrupt a prepared bombing sequence, EVEN when
+    // the total count of reachable squares does not shrink. Do not confuse
+    // this threat with a proven kill: it has a separate replay policy.
+    let pressureDistance=Infinity;
+    for(const [bx,by] of blast){
+      const delta=Math.abs(bx-player.x)+Math.abs(by-player.y);
+      if(delta<pressureDistance)pressureDistance=delta;
+      if(pressureDistance===0)break;
+    }
+    const feint=pressureDistance<=2 && ecDist(enemy.x,enemy.y)<=9;
+    // An aggressive extension may be a kill, a proven closure, or a feint.
+  
+  // A reset instead must accelerate ORIGINAL player bombs (and link with
+  // existing EC1 bombs), shortening the dangerous field after the chain.
+  let gain=0,forced=false;
+  if(near){
+    const before=ecHumanReach(),after=ecHumanReach(candidate);
+    const idx=Math.min(EC_HORIZON-1,Math.ceil(arrival/PLAYER_MOVE_INTERVAL)+1);
+    for(let k=idx;k<=Math.min(EC_HORIZON-1,idx+5);k+=2){
+      if(before[k]>0)gain+=Math.max(0,before[k]-after[k])/before[k];
+    }
+    forced=before[idx]>0&&after[idx]===0;
+  }
+  const attack=near && (forced || gain>=.48 || (hitsNow&&gain>=.35));
+  if(!attack&&!reset&&!feint)return null;
+  const exits=laneSafeFirstSteps(candidate).filter(p=>p.x!==enemy.x||p.y!==enemy.y);
+  const proof=laneLastProof;
+  if(!exits.length)return null;
+  const oldProof=laneLastProof;
+  let chosen=null;
+  for(const p of exits){
+    const route=laneMakeRoute(p,proof);
+    if(!route)continue;
+    const end=route.steps[route.steps.length-1];
+    const score=laneSiteDepth(end.x,end.y)*3+laneDegree(end.x,end.y)*2-
+      route.steps.length*1.2-(ecDist(end.x,end.y)<3?8:0);
+    if(!chosen||score>chosen.score)chosen={p,route,score};
+  }
+  laneLastProof=oldProof;
+  if(!chosen)return null;
+  // An enemy bomb is about to become a crossfire source: its timed impact
+  // is what matters, not its nominal fuse duration.
+  const attackPower=attack?(gain*30+(forced?100:0)+(hitsNow?6:0)+Math.max(0,850-arrival)/160):0;
+  const resetPower=reset ? reset.score : 0;
+    // A feint values its real blast proximity and quick detonation rather
+    // than invented enemy reaction probabilities or made-up guaranteed hits.
+    const feintPower=feint ? 14+(2-pressureDistance)*5+
+      (hitsNow?7:0)+Math.max(0,1050-arrival)/230 : 0;
+    const mode=attackPower>=Math.max(feintPower,resetPower)?'attack':
+      resetPower>=feintPower?'reset':'feint';
+    return {...chosen,power:Math.max(attackPower,resetPower,feintPower),
+      arrival,forced,gain,mode,reset,pressureDistance};
+}
+// If a useful junction is ONE step away, stage there only if our first
+// move already has a complete safe route against current bombs. Always
+// re-check the strike next tick; never force a stale attack commitment.
+function ecChainStrikeStage(){
+  if(ecMirror || ecRoute&&ecRoute.index<ecRoute.steps.length ||
+     matchClock-ecChainStrikeLast<320 || matchClock-ecChainStageLast<240 || !player.alive ||
+     bombs.length<1 || bombs.length>=8 ||
+     matchClock<ecSweepGuardUntil)return false;
+  const events=getTimedBombEvents();
+  if(!events.some(e=>e.time>=390&&e.time<=1200))return false;
+  const allowed=laneSafeFirstSteps().filter(p=>p.x!==enemy.x||p.y!==enemy.y);
+  if(!allowed.length)return false;
+  const oldProof=laneLastProof;
+  const oldPos={x:enemy.x,y:enemy.y};
+  const oldBombs=bombs;
+  let choice=null;
+  for(const step of allowed){
+    if(laneOccupied(step.x,step.y))continue;
+    let strike;
+    try{
+      enemy.x=step.x;enemy.y=step.y;
+      bombs=oldBombs.map(b=>({...b,timer:Math.max(0,b.timer-LANE_MOVE_MS)}));
+      strike=ecChainStrikeEvaluate(LANE_MOVE_MS);
+    }finally{enemy.x=oldPos.x;enemy.y=oldPos.y; bombs=oldBombs;laneLastProof=oldProof;}
+    if(!strike || (!strike.forced && strike.power<19 &&
+         !(strike.mode==='feint' && strike.pressureDistance<=2) &&
+         !(strike.mode==='reset' && strike.reset && strike.reset.cleaned>=700)))continue;
+    const score=strike.power + laneDegree(step.x,step.y)*.7-
+      (laneSiteDepth(step.x,step.y)===0?8:0);
+    if(!choice||score>choice.score)choice={step,score};
+  }
+  if(!choice)return false;
+  enemy.x=choice.step.x;enemy.y=choice.step.y;
+  ecChainStageLast=matchClock;
+  ecPlan=null;ecGoal=null;
+  return true;
+}
+function ecChainStrikeTry(){
+  if(!player.alive || ecMirror || matchClock-ecChainStrikeLast<320 ||
+     bombs.filter(b=>b.owner==='enemy').length>=5)return false;
+  const strike=ecChainStrikeEvaluate();
+  if(!strike)return false;
+  // A reset is a discretionary action, not an emergency command: don't
+  // trigger the merged chain if the opponent can close the only escape.
+  const at={x:enemy.x,y:enemy.y,timer:2000,range:8,owner:'enemy'};
+  const counter=ecCounterBombRouteRisk(at,[strike.p]);
+  const counterSeverity=counter.get(laneKey(strike.p.x,strike.p.y))||0;
+    // The only discretionary safety veto: don't add a non-lethal bomb if
+    // a plausible immediate human counter closes its verified escape.
+    if(strike.mode==='reset' && counterSeverity>=3 ||
+       strike.mode==='feint' && counterSeverity>=2 ||
+       // Re-check an approach-stage attack with the updated opponent position:
+       // its one-step advance was NOT a license to gamble the escape route.
+       matchClock-ecChainStageLast<=LANE_MOVE_MS+35 && counterSeverity>=2)
+      return false;
+  const bomb={...at,id:++nextBombId};
+  const from={x:enemy.x,y:enemy.y};
+  bombs.push(bomb);
+  ecSites.set(laneKey(from.x,from.y),matchClock);
+  ecLastPlaced=matchClock;enemyBombCooldown=320;
+  ecGoal=null;ecPlan=null;ecMirror=null;
+  enemy.x=strike.p.x;enemy.y=strike.p.y;
+  ecRoute=strike.route;ecRoute.signature=laneBombSignature();
+  ecChainStrikeLast=matchClock;
+  void 0;
+  void 0;
+  void 0;
+  return true;
+}
+
+
+
+function ecReset(){
+  ecGoal=null;ecRoute=null;ecSites=new Map();ecVisits=new Map();
+  ecLastPlaced=-Infinity;ecSweepGuardUntil=-Infinity;ecPlan=null;ecPlanAt=-Infinity;
+  ecPlanSignature='';ecDecisionCount=0;ecMirror=null;
+  ecMirrorLastTry=-Infinity;ecMirrorLastDone=-Infinity;
+  ecChainStrikeLast=-Infinity;ecChainStageLast=-Infinity;
+}
+function ecSignature(){
+  return `${player.x},${player.y}|${bombs.map(b=>`${b.id}:${b.x},${b.y}`).join('/')}`;
+}
+function ecWalk(x,y){return laneWalk(x,y);}
+
+// Unlike laneBfsDistances, path goals cannot be routed through a human
+// or a still-live bomb: blocked shortest paths cause indefinite oscillation.
+function ecBfsDistances(tx,ty){
+  const dist=new Int16Array(COLS*ROWS).fill(-1);
+  const pass=(x,y)=>ecWalk(x,y)&&
+    !(player.alive&&player.x===x&&player.y===y)&&
+    !bombs.some(b=>b.x===x&&b.y===y);
+  if(!pass(tx,ty))return dist;
+  const queue=[laneKey(tx,ty)];dist[queue[0]]=0;
+  for(let i=0;i<queue.length;i++){
+    const t=queue[i],x=t%COLS,y=Math.floor(t/COLS);
+    for(const [dx,dy] of EC_DIRS.slice(0,4)){
+      const nx=x+dx,ny=y+dy,nt=laneKey(nx,ny);
+      if(!pass(nx,ny)||dist[nt]>=0)continue;
+      dist[nt]=dist[t]+1;queue.push(nt);
+    }
+  }
+  return dist;
+}
+function ecDist(x,y,p=player){return Math.abs(x-p.x)+Math.abs(y-p.y);}
+// Model every possible human movement (including waiting) in the
+// known bomb field. A candidate is valued by how much viable escape
+// space it removes, not by how many bombs the AI can place.
+function ecHumanReach(extra=null){
+  const all=extra?[...bombs,extra]:bombs;
+  const events=getTimedBombEvents(extra);
+  const size=COLS*ROWS, horizon=EC_HORIZON;
+  const hazard=Array.from({length:horizon},()=>new Uint8Array(size));
+  const occupied=Array.from({length:horizon},()=>new Uint8Array(size));
+  for(let k=0;k<horizon;k++){
+    const start=Math.max(0,k*PLAYER_MOVE_INTERVAL-8);
+    const end=(k+1)*PLAYER_MOVE_INTERVAL+8;
+    for(let i=0;i<events.length;i++){
+      const event=events[i],bomb=all[i];
+      if(start<event.time+BOMB_FLAME_MS){
+        occupied[k][laneKey(bomb.x,bomb.y)]=1;
+      }
+      if(event.time<=end && event.time+BOMB_FLAME_MS>=start){
+        for(const [x,y] of event.cells)hazard[k][laneKey(x,y)]=1;
+      }
+    }
+    for(const f of flames)if(f.timer>start)
+      for(const [x,y] of f.cells)hazard[k][laneKey(x,y)]=1;
+  }
+  const counts=[];
+  let prev=new Uint8Array(size);
+  prev[laneKey(player.x,player.y)]=1;
+  for(let k=0;k<horizon;k++){
+    const next=new Uint8Array(size);
+    const haz=hazard[k],block=occupied[k];
+    for(let y=1;y<ROWS-1;y++)for(let x=1;x<COLS-1;x++){
+      const id=laneKey(x,y);
+      if(!prev[id])continue;
+      for(const [dx,dy] of EC_DIRS){
+        const xx=x+dx, yy=y+dy;
+        if(!ecWalk(xx,yy))continue;
+        const dst=laneKey(xx,yy);
+        if(haz[dst])continue;
+        // The human may remain on their OWN starting bomb until leaving.
+        if(block[dst] && !(xx===player.x&&yy===player.y&&dx===0&&dy===0))continue;
+        next[dst]=1;
+      }
+    }
+    let count=0;
+    for(let i=0;i<size;i++)count+=next[i];
+    counts.push(count);
+    prev=next;
+    if(!count){for(let j=k+1;j<horizon;j++)counts.push(0);break;}
+  }
+  return counts;
+}
+function ecAttackValue(x,y,base){
+  if(!ecWalk(x,y)||laneOccupied(x,y))return -Infinity;
+  const d=ecDist(x,y),depth=laneSiteDepth(x,y),degree=laneDegree(x,y);
+  if(d<2||d>10||degree<2)return -Infinity;
+  // Do not enter a dead corner to plant just because the human is there.
+  if(depth===0 && degree<3 && d<4)return -Infinity;
+  const blast=getBlastCells({x,y,range:8});
+  let humanHit=0,near=0;
+  for(const [a,b] of blast){
+    const h=Math.abs(a-player.x)+Math.abs(b-player.y);
+    if(!h)humanHit=1;
+    if(h<=2)near+=h===0?3:h===1?1:0.2;
+  }
+  if(!near)return -Infinity;
+  // A truly stationary target must be threatened at the exact tile.
+  // Earlier versions scored remote 'nearby' blasts and circled forever.
+  const idle=matchClock-lastPlayerMoveAt>850;
+  if(idle&&!humanHit)return -Infinity;
+  const candidate={x,y,range:8,timer:2000,owner:'enemy'};
+  const after=ecHumanReach(candidate);
+  // Weight long-term survival space and early escape corridors.
+  // A forced elimination beats every non-lethal positional gain.
+  const ticks=[5,9,13,17,21,24];
+  const weights=[0.4,0.9,1.2,1.8,2.4,2.8];
+  let closure=0;
+  for(let i=0;i<ticks.length;i++){
+    const k=ticks[i];
+    closure+=weights[i]*(Math.max(0,base[k]-after[k]))/
+      Math.max(2,Math.sqrt(base[k]||1));
+  }
+  const forced=base[24]>0&&after[24]===0;
+  const cross=humanHit && bombs.some(b=>b.owner==='enemy' &&
+    (b.x===player.x||b.y===player.y) &&
+    (x===player.x)!==(b.x===player.x));
+  const exitPotential=degree>=4?2.2:degree===3?0.7:0;
+  return closure*3.0 + near*1.3 + humanHit*(idle?23:12) +
+    (cross?10:0)+(forced?90:0)+exitPotential -
+    (d<3?8:0)-(depth===0?3:0);
+}
+function ecComputePlan(){
+  const base=ecHumanReach();
+  const distance=ecBfsDistances(enemy.x,enemy.y);
+  let best=null;
+  const own=bombs.filter(b=>b.owner==='enemy').length;
+  for(let y=1;y<ROWS-1;y++)for(let x=1;x<COLS-1;x++){
+    const id=laneKey(x,y),travel=distance[id];
+    if(travel<0||travel>20)continue;
+    if(matchClock-(ecSites.get(id)??-Infinity)<3300)continue;
+    const raw=ecAttackValue(x,y,base);
+    if(raw===-Infinity)continue;
+    // Give slightly more room to travel for a verifiable closure.
+    // At short range, reserve an additional margin against counter-bombs.
+    const visited=matchClock-(ecVisits.get(id)??-Infinity);
+    const clutter=bombs.length>5?Math.min(12,(bombs.length-5)*2):0;
+    const score=raw -travel*1.7 +Math.min(2,visited/1800)-clutter -
+      (ecDist(x,y)<=3&&own>=3?8:0);
+    if(!best||score>best.score)best={x,y,score,raw,travel};
+  }
+  ecPlan=best;
+  ecPlanAt=matchClock;
+  ecPlanSignature=ecSignature();
+  return best;
+}
+function ecPickPlan(force=false){
+  // Re-plan when a bomb appears, human moves, or several ticks pass.
+  const sign=ecSignature();
+  if(force || !ecPlan || ecPlanSignature!==sign ||
+     matchClock-ecPlanAt>410)return ecComputePlan();
+  return ecPlan;
+}
+function ecFinish(from,action,extra={}){
+  enemyVisual=animateVisualPosition(enemyVisual,enemy.x,enemy.y,ENEMY_VISUAL_MOVE_MS);
+  void 0;
+  void 0;
+  void 0;
+  enemyMoveTimer=ENEMY_THINK_INTERVAL;
+}
+// EC1 v1.2: A route that is safe against *current* bombs can still be
+// sealed when the human walks two tiles into its single-file corridor.
+// Evaluate candidate first steps against several plausible human positions
+// BEFORE planting. This is only a placement-time defense; the independently
+// defined EC1 closure/attack score and both older AIs remain untouched.
+
+
+// EC1 v1.3: During an active chain, a human can plant *another* bomb
+// on their present tile (or after one move).  Simulate those new bombs in
+// addition to the candidate EC bomb, and score escape choices using a
+// COMPLETE time-expanded survival proof for each plausible counter.
+// This is spatially generic: there are no special-case map coordinates.
+function ecCounterBombRouteRisk(candidate, exits){
+  const exposure=new Map(exits.map(p=>[laneKey(p.x,p.y),0]));
+  if(!player.alive || !exits.length || ecDist(candidate.x,candidate.y)>8 ||
+     !bombs.length)return exposure;
+  const options=[];
+  // Direct counterbombs are common when the player has just stopped at
+  // a useful lane intersection, even without a new movement event.
+  if(!bombs.some(b=>b.x===player.x&&b.y===player.y))
+    options.push({x:player.x,y:player.y,cost:0,weight:4});
+  const neighbors=[];
+  for(const [dx,dy] of EC_DIRS.slice(0,4)){
+    const x=player.x+dx,y=player.y+dy;
+    if(!ecWalk(x,y) || (x===enemy.x&&y===enemy.y) ||
+       bombs.some(b=>b.x===x&&b.y===y))continue;
+    neighbors.push({x,y});
+  }
+  neighbors.sort((a,b)=>ecDist(a.x,a.y,{x:candidate.x,y:candidate.y})-
+    ecDist(b.x,b.y,{x:candidate.x,y:candidate.y}));
+  for(const p of neighbors.slice(0,4))options.push({...p,cost:1,weight:2});
+  // Reuse existing bomb/proof algorithms rather than implementing a
+  // separate approximate blast simulator.
+  const oldProof=laneLastProof;
+  bombs.push(candidate);
+  try{
+    for(const q of options){
+      const simulated={x:q.x,y:q.y,owner:'player',range:8,
+        timer:2000+q.cost*PLAYER_MOVE_INTERVAL};
+      const safe=laneSafeFirstSteps(simulated);
+      const allowed=new Set(safe.map(p=>laneKey(p.x,p.y)));
+      const proof=laneLastProof;
+      for(const p of exits){
+        const key=laneKey(p.x,p.y);
+        if(!allowed.has(key) || !laneMakeRoute(p,proof))
+          exposure.set(key,exposure.get(key)+q.weight);
+      }
+    }
+  }finally{
+    bombs.pop();
+    laneLastProof=oldProof;
+  }
+  return exposure;
+}
+
+// EC1 v1.5: Before committing an offensive bomb, check whether a moving
+// opponent can sweep a corridor with two forward bombs and a third bomb
+// after turning. This is a generic spatial attack pattern (no map coords).
+// Retain only first escapes that tolerate every reachable sweep scenario;
+// reject the placement if none remain.
+
+
+function ecTryPlant(){
+  if(ecRoute&&ecRoute.index<ecRoute.steps.length)return false;
+  if(enemyBombCooldown>0||matchClock-ecLastPlaced<410)return false;
+  const owned=bombs.filter(b=>b.owner==='enemy').length;
+  if(owned>=5 || bombs.length>=10)return false;
+  const id=laneKey(enemy.x,enemy.y);
+  if(matchClock-(ecSites.get(id)??-Infinity)<3300)return false;
+  if(laneOccupied(enemy.x,enemy.y) || ecDist(enemy.x,enemy.y)<2)return false;
+  const base=ecHumanReach();
+  const strength=ecAttackValue(enemy.x,enemy.y,base);
+  if(strength<5.5)return false;
+  const events=getTimedBombEvents();
+  if(isTileDangerDuring(enemy.x,enemy.y,0,740,events))return false;
+  const candidate={x:enemy.x,y:enemy.y,range:8,timer:2000,owner:'enemy'};
+  const exits=laneSafeFirstSteps(candidate).filter(p=>p.x!==enemy.x||p.y!==enemy.y);
+  if(!exits.length)return false;
+  const proof=laneLastProof;
+  // Keep the real blast-escape proof; speculative future bomb carpets do
+  // not veto a useful EC1 attack. A single likely counter is a tiebreaker.
+  const counterRisk=ecCounterBombRouteRisk(candidate,exits);
+  let choice=null;
+  for(const p of exits){
+    const route=laneMakeRoute(p,proof);
+    if(!route)continue;
+    const endpoint=route.steps[route.steps.length-1];
+    // One safety invariant at attack admission: avoid a corner refuge
+    // if our new shot enters a crowded bomb field.
+    if(owned>=1 && bombs.length>=3 && laneSiteDepth(endpoint.x,endpoint.y)===0)continue;
+    if(laneSiteDepth(candidate.x,candidate.y)===0 &&
+       laneSiteDepth(endpoint.x,endpoint.y)===0)continue;
+    const pd=ecDist(p.x,p.y);
+    // Human-controlled corridor blockage outweighs a marginally shorter
+    // refuge route. Keep attacking from viable sites; don't flee blindly.
+    const counter=counterRisk.get(laneKey(p.x,p.y))||0;
+    const score=laneDegree(p.x,p.y)*2+laneSiteDepth(p.x,p.y)*1.4+
+      Math.min(7,pd)*0.35 - (pd<3?6:0) - 8*counter;
+    if(!choice||score>choice.score)choice={p,route,score,counter};
+  }
+  if(!choice)return false;
+  const bomb={...candidate,id:++nextBombId};
+  bombs.push(bomb);
+  ecSites.set(id,matchClock);
+  ecLastPlaced=matchClock;
+  ecGoal=null;ecPlan=null;
+  enemyBombCooldown=320;
+  ecRoute=choice.route;
+  ecRoute.signature=laneBombSignature();
+  enemy.x=choice.p.x;enemy.y=choice.p.y;
+  void 0;
+  void 0;
+  void 0;
+  return true;
+}
+// EC1 defensive refinement: if the human is dropping bombs while walking in
+// a straight line, probe a plausible NEXT placement before committing to an
+// otherwise safe but fragile corridor. This does not change the attack policy.
+function ecPredictCounterBomb(){
+  if(!bombs.some(b=>b.owner==='enemy') || !bombs.some(b=>b.owner==='player'))return null;
+  const closest=Math.min(...getTimedBombEvents().map(e=>e.time));
+  if(closest>1750) return null;
+  // Two most recent player movements: constant memory, identical timestamps.
+  const moves=recentPlayerMoves.slice().reverse();
+  if(moves.length<2 || matchClock-moves[0].t>220 ||
+     moves[0].t-moves[1].t>240) return null;
+  const dx=moves[0].x-moves[1].x;
+  const dy=moves[0].y-moves[1].y;
+  if(Math.abs(dx)+Math.abs(dy)!==1 ||
+     moves[0].x!==player.x || moves[0].y!==player.y)return null;
+  const x=player.x+dx,y=player.y+dy;
+  if(!ecWalk(x,y)||bombs.some(b=>b.x===x&&b.y===y))return null;
+  return {x,y,timer:2000,range:8,owner:'player'};
+}
+
+
+// EC1 v1.4: If a chain is approaching, don't sit on the blast line of
+// EC1's own bomb while the human can relay another bomb into that chain.
+// This protects all positions, rather than coordinates from a replay.
+
+
+
+// EC1 v1.6: While the human is actively laying a bomb carpet, verify escape
+// *destinations* under plausible continued placement (forward and a turn),
+// rather than choosing a locally safe step that leads back into a blast lane.
+// All search coordinates are relative to the present player and bomb field.
+
+
+// EC1 v1.7: Convert the human's staggered corridor sweep into an offensive
+// two-bomb maneuver.  We prove the route to the SECOND site and a complete
+// post-placement escape before laying the first bomb.  No map coordinates,
+// learned replay positions, or changes to the other two AIs are involved.
+function ecMirrorScore(first,two, baseline, firstCounts){
+  bombs.push(first,two);
+  let paired;
+  try{paired=ecHumanReach();}
+  finally{bombs.pop();bombs.pop();}
+  const ticks=[9,14,18,21,24],weights=[.6,1.2,1.8,2.1,2.5];
+  let gain=0;
+  for(let i=0;i<ticks.length;i++){
+    const k=ticks[i];
+    gain+=weights[i]*Math.max(0,(firstCounts[k]||0)-(paired[k]||0))/
+      Math.max(2,Math.sqrt(baseline[k]||1));
+  }
+  const blast=getBlastCells(two);
+  const direct=blast.some(([x,y])=>x===player.x&&y===player.y);
+  const near=blast.some(([x,y])=>Math.abs(x-player.x)+Math.abs(y-player.y)<=2);
+  return gain*5+(direct?13:0)+(near?3:0)+
+    (baseline[24]>0&&paired[24]===0?110:0);
+}
+// Only a future second-site retreat is allowed to justify the offensive sweep.
+// Simulate the 360ms journey with real timers advanced, then evaluate the
+// second placement with the existing full time-expanded escape proof.
+function ecMirrorSecondProof(first,second,dt=360){
+  const savedBombs=bombs.slice(),oldProof=laneLastProof;
+  const oldPos={x:enemy.x,y:enemy.y};
+  try{
+    bombs=bombs.map(b=>({...b,timer:Math.max(0,b.timer-dt)}));
+    bombs.push({...first,timer:2000-dt});
+    enemy.x=second.x;enemy.y=second.y;
+    const next=laneSafeFirstSteps({...second,timer:2000});
+    const proof=laneLastProof;
+    let best=null;
+    for(const p of next){
+      if(p.x===second.x&&p.y===second.y)continue;
+      const route=laneMakeRoute(p,proof);
+      if(!route)continue;
+      const score=laneDegree(p.x,p.y)*2+laneSiteDepth(p.x,p.y)-
+        route.steps.length*1.5-(ecDist(p.x,p.y)<3?12:0);
+      if(!best||score>best.score)best={route,score};
+    }
+    return best;
+  }finally{
+    bombs=savedBombs;enemy.x=oldPos.x;enemy.y=oldPos.y;
+    laneLastProof=oldProof;
+  }
+}
+function ecMirrorTryStart(){
+  if(ecMirror||ecRoute&&ecRoute.index<ecRoute.steps.length ||
+     enemyBombCooldown>0 || matchClock-ecLastPlaced<410 ||
+     matchClock-ecMirrorLastTry<670 || matchClock-ecMirrorLastDone<1300 ||
+     matchClock<ecSweepGuardUntil || !player.alive)return false;
+  ecMirrorLastTry=matchClock;
+  const owned=bombs.filter(b=>b.owner==='enemy').length;
+  if(owned>=3 || bombs.length>=7)return false;
+  const dist=ecDist(enemy.x,enemy.y);
+  if(dist<3||dist>8||laneOccupied(enemy.x,enemy.y))return false;
+  const events=getTimedBombEvents();
+  if(isTileDangerDuring(enemy.x,enemy.y,0,760,events))return false;
+  const first={x:enemy.x,y:enemy.y,timer:2000,range:8,owner:'enemy'};
+  // A normal planted bomb must still have an independently proven exit.
+  const initial=laneSafeFirstSteps(first);
+  if(!initial.some(p=>p.x!==enemy.x||p.y!==enemy.y))return false;
+  const baseline=ecHumanReach();
+  bombs.push(first);
+  let firstCounts;
+  try{firstCounts=ecHumanReach();}
+  finally{bombs.pop();}
+  let chosen=null;
+  for(const [dx,dy] of EC_DIRS.slice(0,4)){
+    const mid={x:enemy.x+dx,y:enemy.y+dy};
+    const second={x:enemy.x+2*dx,y:enemy.y+2*dy,
+      timer:2360,range:8,owner:'enemy'};
+    if(!ecWalk(mid.x,mid.y)||!ecWalk(second.x,second.y)||
+       laneOccupied(mid.x,mid.y)||laneOccupied(second.x,second.y) ||
+       ecDist(second.x,second.y)<2||ecDist(second.x,second.y)>8 ||
+       laneSiteDepth(second.x,second.y)<1)continue;
+    // Must survive the approach including potential old linked detonations.
+    const allEvents=getTimedBombEvents(first);
+    if(isTileDangerDuring(mid.x,mid.y,0,420,allEvents) ||
+       isTileDangerDuring(second.x,second.y,100,480,allEvents))continue;
+    const safety=ecMirrorSecondProof(first,second);
+    if(!safety)continue;
+    const score=ecMirrorScore(first,second,baseline,firstCounts);
+    // Demand a *useful* additional cut, not a two-bomb display of aggression.
+    if(score<14)continue;
+    const toward=dist-ecDist(second.x,second.y);
+    const value=score+(toward>0?4:-3)+laneDegree(second.x,second.y)*.6+
+      (laneSiteDepth(mid.x,mid.y)===0?-5:0);
+    if(!chosen||value>chosen.value)chosen={mid,second,value,score};
+  }
+  if(!chosen)return false;
+  // This first immediate move must be a proven safe first step for the
+  // actually placed first bomb, rather than only a future-site estimate.
+  const allowed=laneSafeFirstSteps(first);
+  if(!allowed.some(p=>p.x===chosen.mid.x&&p.y===chosen.mid.y))return false;
+  const bomb={...first,id:++nextBombId};
+  bombs.push(bomb);
+  const plantedAt={x:enemy.x,y:enemy.y};
+  ecSites.set(laneKey(enemy.x,enemy.y),matchClock);
+  ecLastPlaced=matchClock;enemyBombCooldown=240;
+  ecPlan=null;ecGoal=null;ecRoute=null;
+  ecMirror={second:{x:chosen.second.x,y:chosen.second.y},
+    born:matchClock,signature:laneBombSignature(),
+    firstId:bomb.id,score:Math.round(chosen.score*10)/10};
+  enemy.x=chosen.mid.x;enemy.y=chosen.mid.y;
+  void 0;
+  void 0;
+  void 0;
+  return true;
+}
+// Return {handled:boolean,planted:boolean} and decline gracefully if the
+// opponent adds a bomb or the real-time planner invalidates the maneuver.
+function ecMirrorContinue(){
+  if(!ecMirror)return null;
+  const plan=ecMirror;
+  const stop=()=>{ecMirror=null;ecMirrorLastDone=matchClock;return null;};
+  // The human is allowed to place new bombs. Only real loss of the
+  // anchor or lack of a verified next step cancels the pair.
+  if(matchClock-plan.born>1050 ||
+     !bombs.some(b=>b.id===plan.firstId))return stop();
+  const dest=plan.second;
+  if(enemy.x===dest.x&&enemy.y===dest.y){
+    if(enemyBombCooldown>0){
+      const predicted=ecPredictCounterBomb();
+      const viable=laneSafeFirstSteps(predicted);
+      if(viable.some(q=>q.x===enemy.x&&q.y===enemy.y))return {handled:true,planted:false};
+      return stop();
+    }
+    const proposal={x:enemy.x,y:enemy.y,owner:'enemy',timer:2000,range:8};
+    if(laneOccupied(enemy.x,enemy.y)||isTileDangerDuring(enemy.x,enemy.y,0,400,getTimedBombEvents()) ||
+       bombs.filter(b=>b.owner==='enemy').length>=5)return stop();
+    const options=laneSafeFirstSteps(proposal);
+    const proof=laneLastProof;
+    let best=null;
+    for(const p of options){
+      if(p.x===enemy.x&&p.y===enemy.y)continue;
+      const route=laneMakeRoute(p,proof);if(!route)continue;
+      const score=laneDegree(p.x,p.y)*2+laneSiteDepth(p.x,p.y)*1.4-
+        route.steps.length*2-(ecDist(p.x,p.y)<3?12:0);
+      if(!best||score>best.score)best={p,route,score};
+    }
+    if(!best)return stop();
+    // Dynamic player-counter test: don't insist on a second bomb when a
+    // newly placed human bomb has removed the validated retreat.
+    const risk=ecCounterBombRouteRisk(proposal,options);
+    if((risk.get(laneKey(best.p.x,best.p.y))||0)>4)return stop();
+    const bomb={...proposal,id:++nextBombId};
+    bombs.push(bomb);
+    ecSites.set(laneKey(enemy.x,enemy.y),matchClock);
+    ecLastPlaced=matchClock;enemyBombCooldown=320;
+    const from={x:enemy.x,y:enemy.y};
+    enemy.x=best.p.x;enemy.y=best.p.y;
+    ecRoute=best.route;ecRoute.signature=laneBombSignature();
+    ecMirror=null;ecMirrorLastDone=matchClock;
+    ecPlan=null;ecGoal=null;
+    void 0;
+    void 0;
+    void 0;
+    return {handled:true,planted:true};
+  }
+  const dx=Math.sign(dest.x-enemy.x),dy=Math.sign(dest.y-enemy.y);
+  if(Math.abs(dest.x-enemy.x)+Math.abs(dest.y-enemy.y)!==1)return stop();
+  const safe=laneSafeFirstSteps();
+  if(!safe.some(q=>q.x===dest.x&&q.y===dest.y))return stop();
+  const predicted=ecPredictCounterBomb();
+  if(predicted){
+    const projected=laneSafeFirstSteps(predicted);
+    if(!projected.some(q=>q.x===dest.x&&q.y===dest.y))return stop();
+  }
+  enemy.x=dest.x;enemy.y=dest.y;
+  return {handled:true,planted:false};
+}
+
+function ecThink(){
+  const from={x:enemy.x,y:enemy.y};
+  ecDecisionCount++;
+  ecVisits.set(laneKey(enemy.x,enemy.y),matchClock);
+  const sign=laneBombSignature();
+  // v1.8: honor an active two-bomb plan first. In v1.7 speculative
+  // retreat kept cancelling it before the second bomb (0/5 followups).
+  const mirrorAction=ecMirrorContinue();
+  if(mirrorAction){
+    ecFinish(from,mirrorAction.planted?'ec_mirror_followup_bomb':'ec_mirror_advance',
+      {planted:mirrorAction.planted});
+    return;
+  }
+  // v3.0 offensive core: no speculative retreat branches here.
+  // A planned two-bomb assault finishes first; only verified real blast
+  // timelines can interrupt a completed escape path.
+  // Dynamic human bombs invalidate any committed refuge.
+  if(ecRoute&&ecRoute.signature!==sign)ecRoute=null;
+  if(ecRoute&&ecRoute.index<ecRoute.steps.length){
+    const p=ecRoute.steps[ecRoute.index];
+    const safe=laneSafeFirstSteps();
+    if(safe.some(a=>a.x===p.x&&a.y===p.y)){
+      enemy.x=p.x;enemy.y=p.y;ecRoute.index++;
+      ecFinish(from,'ec_retreat',{committed:true,planted:false});
+      return;
+    }
+    ecRoute=null;
+  }
+  const soon=bombs.some(b=>b.timer<=1450&&ecDist(b.x,b.y,{x:enemy.x,y:enemy.y})<=8);
+  if(bombs.length>=3&&soon){
+    laneSafeFirstSteps();
+    const shelter=laneShelterPlan(laneLastProof);
+    if(shelter){
+      const p=shelter.steps[0];enemy.x=p.x;enemy.y=p.y;
+      ecRoute={...shelter,index:1,signature:laneBombSignature()};
+      ecFinish(from,'ec_shelter',{planted:false});return;
+    }
+  }
+  // Attack now while an existing blast can relay into a new lane.
+  // The strike must pass the same full escape-path proof as ordinary bombs.
+  if(ecChainStrikeTry()){
+    ecFinish(from,'ec_chain_strike_bomb',{planted:true});return;
+  }
+  if(ecChainStrikeStage()){
+    ecFinish(from,'ec_chain_strike_approach',{planted:false});return;
+  }
+  if(ecMirrorTryStart()){
+    ecFinish(from,'ec_mirror_first_bomb',{planted:true});return;
+  }
+  if(ecTryPlant()){
+    ecFinish(from,'ec_cut_bomb_and_escape',{planted:true});return;
+  }
+  const safe=laneSafeFirstSteps();
+  const proof=laneLastProof;
+  const target=ecPickPlan();
+  ecGoal=target?{x:target.x,y:target.y}:null;
+  if(safe.length){
+    const dist=ecGoal?ecBfsDistances(ecGoal.x,ecGoal.y):null;
+    let best=null;
+    for(const p of safe){
+      const same=p.x===enemy.x&&p.y===enemy.y;
+      const pd=ecDist(p.x,p.y);
+      const degree=laneDegree(p.x,p.y);
+      const targetDist=dist?dist[laneKey(p.x,p.y)]:-1;
+      const recent=matchClock-(ecVisits.get(laneKey(p.x,p.y))??-Infinity);
+      let score=(targetDist>=0?-targetDist*4:-40)+degree*0.9+
+        Math.min(3,Math.max(0,recent)/900) - (recent<500?6:0)-
+        Math.abs(pd-5)*0.8-
+        (same?4:0)-(pd<=2?14:0);
+      if(laneSiteDepth(p.x,p.y)===0){
+        score-=6;
+        if(pd<=6 && laneSiteDepth(enemy.x,enemy.y)>0)score-=6;
+      }
+      if(!best||score>best.score)best={...p,score};
+    }
+    if(best){
+      enemy.x=best.x;enemy.y=best.y;
+      // Only commit during actual bomb threats. In safe space, allow
+      // offensive targets to respond to the human changing position.
+      if(bombs.length||flames.length){
+        ecRoute=laneMakeRoute(best,proof);
+        if(ecRoute)ecRoute.signature=laneBombSignature();
+      }else ecRoute=null;
+      ecFinish(from,'ec_cut_position',{planted:false,target:ecGoal});
+      return;
+    }
+  }
+  const desperate=laneLastResortStep(proof);
+  if(desperate){enemy.x=desperate.x;enemy.y=desperate.y;}
+  ecRoute=null;
+  ecFinish(from,'ec_emergency',{planted:false});
+}
+
+
+// Warp: EC1's decision policy with an independent, intentionally unfair
+// teleport ability. Teleport consumes a shared 5-second cooldown whether
+// used for attack or retreat. Other AI modes never call these functions.
+const WARP_COOLDOWN_MS=5000;
+const WARP_PROBE_INTERVAL_MS=480;
+let warpLastAt=-Infinity;
+let warpLastProbeAt=-Infinity;
+let warpEffect=null;
+function warpReset(){
+  warpLastAt=-Infinity;warpLastProbeAt=-Infinity;warpEffect=null;}
+function warpReady(){return matchClock-warpLastAt>=WARP_COOLDOWN_MS;}
+function warpCellsThreatened(x,y,from,to,events){
+  return isTileDangerDuring(x,y,from,to,events);
+}
+// An arrival location must be empty, unoccupied, and have a provable future
+// path through known bombs. The enemy's original square is not special-cased.
+function warpLandingAllowed(x,y,proof,events,from){
+  if(!laneWalk(x,y)||laneOccupied(x,y) || (x===from.x&&y===from.y))return false;
+  if(!proof?.future[0][laneKey(x,y)])return false;
+  if(warpCellsThreatened(x,y,0,ENEMY_STEP_MS+35,events))return false;
+  return true;
+}
+function warpCommit(from,to,reason,details={}){
+  // Snap visual animation instead of sliding across the entire board.
+  warpLastAt=matchClock;
+  enemy.x=to.x;enemy.y=to.y;
+  enemyVisual=createVisualPosition(enemy.x,enemy.y);
+  warpEffect={from:{...from},to:{...to},remaining:410};
+  // Never reuse an EC1 route or a two-bomb plan after teleportation.
+  ecRoute=null;ecGoal=null;ecPlan=null;ecMirror=null;
+  void 0;
+  void 0;
+}
+function warpEmergency(events){
+  if(!bombs.length&&!flames.length)return false;
+  const from={x:enemy.x,y:enemy.y};
+  // EC1 normally keeps moving out of danger. Warp only when imminent danger
+  // and all nearby exits are narrow or provably not survivable.
+  const imminent=warpCellsThreatened(from.x,from.y,0,700,events);
+  if(!imminent)return false;
+  const exits=laneSafeFirstSteps();
+  const proof=laneLastProof;
+  if(exits.length>=2 && !warpCellsThreatened(from.x,from.y,0,ENEMY_STEP_MS+45,events))return false;
+  let best=null;
+  for(let y=1;y<ROWS-1;y++)for(let x=1;x<COLS-1;x++){
+    if(!warpLandingAllowed(x,y,proof,events,from))continue;
+    const degree=laneDegree(x,y),depth=laneSiteDepth(x,y);
+    const distance=Math.abs(x-from.x)+Math.abs(y-from.y);
+    if(distance<3)continue;
+    const pd=ecDist(x,y);
+    let longSafe=0;
+    for(let k=0;k<Math.min(proof.steps,11);k++) longSafe+=proof.safe[k][laneKey(x,y)];
+    const score=longSafe*5+degree*3+Math.min(depth,3)*4+
+      Math.min(pd,7)*0.5-(pd<=2?22:0)-
+      (warpCellsThreatened(x,y,0,1100,events)?25:0);
+    if(!best||score>best.score)best={x,y,score};
+  }
+  if(!best)return false;
+  warpCommit(from,best,'emergency',{score:Math.round(best.score*10)/10});
+  ecFinish(from,'warp_emergency',{warp:true,planted:false});
+  return true;
+}
+function warpAttack(){
+  if(enemyBombCooldown>0 || matchClock-ecLastPlaced<400 ||
+      bombs.filter(b=>b.owner==='enemy').length>=5 || bombs.length>=10) return false;
+  const from={x:enemy.x,y:enemy.y};
+  const events=getTimedBombEvents();
+  const base=ecHumanReach();
+  const candidates=[];
+  for(let y=1;y<ROWS-1;y++)for(let x=1;x<COLS-1;x++){
+    if(!laneWalk(x,y)||laneOccupied(x,y))continue;
+    if(Math.abs(x-from.x)+Math.abs(y-from.y)<3)continue;
+    const d=ecDist(x,y),degree=laneDegree(x,y);
+    if(d<2||d>9||degree<2)continue;
+    if(matchClock-(ecSites.get(laneKey(x,y))??-Infinity)<3300)continue;
+    // Late-chain warp strikes may deliberately arrive on a tile that a
+    // bomb will hit several hundred milliseconds later. Only reject
+    // landing squares already burning or exploding before our first step.
+    if(warpCellsThreatened(x,y,0,ENEMY_STEP_MS+70,events))continue;
+    const blast=getBlastCells({x,y,range:8});
+    let hit=0,near=0;
+    for(const [bx,by] of blast){
+      const dist=Math.abs(bx-player.x)+Math.abs(by-player.y);
+      if(dist===0)hit=1;
+      if(dist<=2)near+=dist===0?4:dist===1?2:0.4;
+    }
+    if(!near)continue;
+    // Select a handful of promising sites before the more expensive
+    // time-expanded enemy/player survival evaluations.
+    const quick=hit*22+near*1.5+degree*1.8+
+      Math.min(2,laneSiteDepth(x,y))*2-Math.abs(d-4)*1.4;
+    candidates.push({x,y,quick});
+  }
+  candidates.sort((a,b)=>b.quick-a.quick);
+  let best=null;
+  // At most 10 thorough tactical probes per cooldown, avoiding frame stalls.
+  for(const site of candidates.slice(0,10)){
+    const {x,y}=site;
+    const value=ecAttackValue(x,y,base);
+    if(!Number.isFinite(value) || value<7)continue;
+    const candidate={x,y,range:8,timer:2000,owner:'enemy'};
+    const after=getTimedBombEvents(candidate);
+    const newTime=after[after.length-1].time;
+    const giri=newTime>=320&&newTime<=650;
+    const blast=getBlastCells(candidate);
+    const hit=blast.some(([bx,by])=>bx===player.x&&by===player.y);
+    // The late chain is attractive, but do not call a harmless early
+    // detonation a 'giri' strike unless it actually threatens the human.
+    const giriBonus=giri&&hit?32+(650-newTime)*0.03:0;
+    let score=value + giriBonus+site.quick*0.18;
+    if(score<19 || best&&score<best.score)continue;
+    // Simulate the warp by using the same EC1 escape planner from its
+    // prospective planting square. Do not commit if the bomb traps the AI.
+    const origin={x:enemy.x,y:enemy.y};
+    enemy.x=x;enemy.y=y;
+    let chosen=null;
+    try{
+      const exits=laneSafeFirstSteps(candidate)
+        .filter(q=>q.x!==x||q.y!==y);
+      const proof=laneLastProof;
+      for(const p of exits){
+        const route=laneMakeRoute(p,proof);
+        if(!route)continue;
+        const endpoint=route.steps[route.steps.length-1];
+        const safety=laneDegree(endpoint.x,endpoint.y)*2+
+          Math.min(2,laneSiteDepth(endpoint.x,endpoint.y))*2 -
+          (ecDist(p.x,p.y)<=2?9:0);
+        if(!chosen||safety>chosen.safety)chosen={p,route,safety};
+      }
+    }finally{enemy.x=origin.x;enemy.y=origin.y;}
+    if(!chosen)continue;
+    score+=chosen.safety*0.35;
+    if(!best||score>best.score)best={site,score,choice:chosen,giri,newTime};
+  }
+  if(!best)return false;
+  const site=best.site;
+  const bomb={x:site.x,y:site.y,range:8,timer:2000,owner:'enemy',id:++nextBombId};
+  warpCommit(from,site,'attack',{score:Math.round(best.score*10)/10,
+    giri:best.giri,detonationInMs:Math.round(best.newTime)});
+  bombs.push(bomb);
+  ecSites.set(laneKey(site.x,site.y),matchClock);
+  ecLastPlaced=matchClock;enemyBombCooldown=320;
+  // The warp and planting happen in the same AI turn; take the first
+  // proven escape step immediately as EC1 does after normal placement.
+  enemy.x=best.choice.p.x;enemy.y=best.choice.p.y;
+  enemyVisual=createVisualPosition(enemy.x,enemy.y);
+  ecRoute=best.choice.route;
+  ecRoute.signature=laneBombSignature();
+  void 0;
+  void 0;
+  ecFinish(from,'warp_giri_bomb',{warp:true,planted:true});
+  return true;
+}
+function warpThink(){
+  if(warpReady()){
+    const events=(bombs.length||flames.length)?getTimedBombEvents():[];
+    if(warpEmergency(events))return;
+    if(matchClock-warpLastProbeAt>=WARP_PROBE_INTERVAL_MS){
+      warpLastProbeAt=matchClock;
+      if(warpAttack())return;
+    }
+  }
+  ecThink();
 }
 
 function update(dt) {
   if (gameOver) return;
-  replayClock += dt;
+  matchClock += dt;
+  if (warpEffect) warpEffect.remaining=Math.max(0,warpEffect.remaining-dt);
 
   bombCooldown = Math.max(0, bombCooldown - dt);
 
@@ -5015,11 +5856,7 @@ function update(dt) {
     let dx = 0;
     let dy = 0;
 
-    if (joystickDirection === "arrowup") dy = -1;
-    else if (joystickDirection === "arrowdown") dy = 1;
-    else if (joystickDirection === "arrowleft") dx = -1;
-    else if (joystickDirection === "arrowright") dx = 1;
-    else if (heldKeys.has("arrowup") || heldKeys.has("w") || gamepadKeys.has("arrowup")) dy = -1;
+    if (heldKeys.has("arrowup") || heldKeys.has("w") || gamepadKeys.has("arrowup")) dy = -1;
     else if (heldKeys.has("arrowdown") || heldKeys.has("s") || gamepadKeys.has("arrowdown")) dy = 1;
     else if (heldKeys.has("arrowleft") || heldKeys.has("a") || gamepadKeys.has("arrowleft")) dx = -1;
     else if (heldKeys.has("arrowright") || heldKeys.has("d") || gamepadKeys.has("arrowright")) dx = 1;
@@ -5041,512 +5878,16 @@ function update(dt) {
 
   enemyBombCooldown = Math.max(0, enemyBombCooldown - dt);
 
-  if (activeAiMode === 'lane') {
-    enemyMoveTimer -= dt;
-    if (enemyMoveTimer <= 0) {
-      aiBlastCache = new Map();
-      v17ClearCaches();
-      v17TimelineCache = new Map();
-      laneThink();
-    }
-  } else {
-  // 敵AIをプレイヤーと同じ120msごとに動かす
+  // Stealth uses exactly the same laneThink() as visible CP1.
+  // Only enemy rendering changes; AI decisions and physics are identical.
   enemyMoveTimer -= dt;
-
   if (enemyMoveTimer <= 0) {
-    aiBlastCache=new Map();
-    aiShadowRiskCache=new Map();
+    aiBlastCache = new Map();
     v17ClearCaches();
-    v17ReachCache=new Map();
-    v17TimelineCache=new Map();
-    v17TrapBlastCache=new Map();
-    v17PressureCache=new Map();
-    observePlayerMotionAtAiTick();
-    const previousEnemyPosition = { x: enemy.x, y: enemy.y };
-    let v60SavedEscapeDiagnostics=null;
-    let v60PlacedBomb=false;
-    let v74CommittedAssault=false;
-    let v69VerifiedEscape=null;
-    let v70UnthreatenedPlan=null;
-    let v18EscapingThisTick=false;
-    // LG3: Finish the committed fast-escape steps before other tactics.
-    // Revalidate against live player movement and bomb timers each tick.
-    let v18GiriFastHandled=false;
-    if(v18GiriFastPlan){
-      const p=v18GiriFastPlan;
-      v18GiriFastPlan=null;
-      const previous=p.steps[p.nextIndex-1],next=p.steps[p.nextIndex];
-      if(next && replayClock-p.placedAt<=p.nextIndex*ENEMY_THINK_INTERVAL+65 &&
-         enemy.x===previous.x&&enemy.y===previous.y &&
-         enemyCanMove(next.x,next.y,getTimedBombEvents(),1) &&
-         !isTileDangerDuring(next.x,next.y,0,
-           (p.nextIndex===p.steps.length-1 ? ENEMY_STEP_MS*2 : ENEMY_STEP_MS)+45,
-           getTimedBombEvents())){
-        enemy.x=next.x;enemy.y=next.y;
-        v18GiriFastHandled=true;
-        v60PlacedBomb=true;
-        v74CommittedAssault=true;
-        v18EscapingThisTick=true;
-        replayLog('ai_v18_l_giri_fast_exit',{from:previous,to:next,step:p.nextIndex+1});
-        replayRecordDecision('giri_oki_fast_exit',{
-          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
-          activeBombs:bombs.length});
-        p.nextIndex++;
-        if(p.nextIndex<p.steps.length)v18GiriFastPlan=p;
-      }
-    }
-    v18StrategicSafety=null;
-    v18ThreatSafety=null;
-    const currentEvents = getTimedBombEvents();
-    const currentThreat = currentEvents.some(event =>
-      event.cells.some(([x, y]) => x === enemy.x && y === enemy.y) && event.time <= 2600
-    ) || flames.some(flame => flame.cells.some(([x, y]) => x === enemy.x && y === enemy.y));
-
-    // LG5: Give the 7,3 -> 7,1 finisher priority over generic retreat.
-    // If a safer exit is not provable, the normal survival branch takes over.
-    let v18EdgeRelayHandled=false;
-    const edgeRelay=v18GiriFastHandled ? null : findV18EdgeLaneRelay(currentEvents);
-    if(edgeRelay){
-      if(edgeRelay.giri && placeEnemyBomb(edgeRelay.giri)){
-        v18EdgeRelayHandled=true;v60PlacedBomb=true;v74CommittedAssault=true;
-        const shot=edgeRelay.giri;
-        const step=shot.giriEscape;
-        const post=getTimedBombEvents();
-        if(enemyCanMove(step.x,step.y,post,1) &&
-           !isTileDangerDuring(step.x,step.y,0,ENEMY_STEP_MS+45,post)){
-          enemy.x=step.x;enemy.y=step.y;
-          if(shot.giriFastRoute){
-            v18GiriFastPlan={placedAt:replayClock,nextIndex:1,
-              steps:[shot.giriFastRoute.first,shot.giriFastRoute.second,
-                     shot.giriFastRoute.third]};
-          }
-        }
-        replayRecordDecision('edge_lane_giri_oki',{
-          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
-          remainingMs:edgeRelay.remaining,activeBombs:bombs.length});
-      }else if(edgeRelay.wait){
-        v18EdgeRelayHandled=true;v60PlacedBomb=true;v74CommittedAssault=true;
-        replayRecordDecision('edge_lane_hold',{
-          from:previousEnemyPosition,to:previousEnemyPosition,
-          remainingMs:edgeRelay.remaining,activeBombs:bombs.length});
-      }else if(edgeRelay.first){
-        enemy.x=edgeRelay.first.x;enemy.y=edgeRelay.first.y;
-        v18EdgeRelayHandled=true;v60PlacedBomb=true;v74CommittedAssault=true;
-        replayLog('ai_v18_edge_lane_approach',{
-          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
-          target:edgeRelay.target,remainingMs:edgeRelay.remaining});
-        replayRecordDecision('edge_lane_approach',{
-          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
-          activeBombs:bombs.length});
-      }
-    }
-
-    // v72: Execute an intentional two-sided corner lock instead of letting
-    // every escape heuristic drag the AI away from its follow-up site.
-    // Any failed movement/survival/placement test falls back to v71.
-    const v72Setup=(v18GiriFastHandled || v18EdgeRelayHandled) ? null : v72CornerCapturePlan(currentEvents);
-    let v72Handled=false;
-    if(v72Setup){
-      if(v72Setup.first){
-        enemy.x=v72Setup.first.x;enemy.y=v72Setup.first.y;
-        v60PlacedBomb=true; // marks a protected action for later arbiter
-        v72Handled=true;
-        replayLog('ai_v72_corner_setup',{
-          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
-          target:v72Setup.target,anchorRemainingMs:v72Setup.remaining});
-        replayRecordDecision('corner_setup',{currentThreat,
-          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
-          activeBombs:bombs.length});
-      } else if(enemyBombCooldown<=0){
-        const evaluation=evaluateEnemyBombSpot(enemy.x,enemy.y);
-        if(evaluation?.v72CornerClosure && placeEnemyBomb(evaluation)){
-          v72Handled=true;v60PlacedBomb=true;
-          replayRecordDecision('corner_closure',{currentThreat,
-            from:previousEnemyPosition,to:previousEnemyPosition,
-            activeBombs:bombs.length});
-        }
-      }
-    }
-    let v74RelayHandled=false;
-    if(!v72Handled && !v18GiriFastHandled && !v18EdgeRelayHandled){
-      const relay=v74CornerRelayPlan(currentEvents);
-      if(relay && relay.first){
-        enemy.x=relay.first.x;enemy.y=relay.first.y;
-        v74RelayHandled=true;v60PlacedBomb=true;
-        replayLog('ai_v74_relay_setup',{from:previousEnemyPosition,
-          to:{x:enemy.x,y:enemy.y},target:relay.target,
-          remainingMs:relay.remaining});
-        replayRecordDecision('relay_setup',{currentThreat,
-          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},activeBombs:bombs.length});
-      }else if(relay && enemyBombCooldown<=0){
-        const evalRelay=evaluateEnemyBombSpot(enemy.x,enemy.y);
-        if(evalRelay?.v74CornerRelay && placeEnemyBomb(evalRelay)){
-          v74RelayHandled=true;v60PlacedBomb=true;
-          replayRecordDecision('relay_bomb',{currentThreat,
-            from:previousEnemyPosition,to:previousEnemyPosition,activeBombs:bombs.length});
-        }
-      }
-    }
-    // 高攻撃型の優先順位: 角封鎖/リレー -> 即時危険判定 -> 安全な攻撃と移動。
-    // 750ms は「脱出を始めてよい時刻」ではない。危険判定を先延ばしに
-    // しても、自分が生き残れる経路は従来どおり全爆弾の時系列で検証する。
-    const IMMEDIATE_DEADLY_TIME = 750;
-    const isImminentDanger = currentEvents.some(event =>
-      event.time <= IMMEDIATE_DEADLY_TIME &&
-      event.cells.some(([x, y]) => x === enemy.x && y === enemy.y)
-    ) || flames.some(flame =>
-      flame.cells.some(([x, y]) => x === enemy.x && y === enemy.y));
-
-    if (v18GiriFastHandled || v18EdgeRelayHandled || v72Handled || v74RelayHandled) {
-      // 先に検証済みの角封鎖/リレー攻撃を尊重する。
-    } else {
-      // 期限が750msより後でも、後続の爆発から逃げ切れない場合は
-      // 先に回避する。単なる即時危険判定の変更による自爆を防ぐ。
-      let verifiedEscape = null;
-      let escapeDiagnostics = null;
-      if (currentThreat || isImminentDanger) {
-        escapeDiagnostics = {};
-        verifiedEscape = findAdaptiveTimedSafeStep(enemy.x, enemy.y,
-          escapeDiagnostics);
-        v60SavedEscapeDiagnostics = escapeDiagnostics;
-        v69VerifiedEscape = verifiedEscape;
-        if(verifiedEscape && escapeDiagnostics.viableFirstSteps?.length)
-          v18ThreatSafety={origin:{x:enemy.x,y:enemy.y},
-            bombKey:v17BombFieldKey(),viable:escapeDiagnostics.viableFirstSteps,
-            plan:verifiedEscape};
-      }
-      const mustEvade = isImminentDanger || (currentThreat && !verifiedEscape);
-
-      // A validated last-second bomb may supersede the regular escape
-      // branch ONLY if the planting turn and the very next move are safe.
-      // Unlike generic attack movement, follow the verified escape step.
-      const giri = enemyBombCooldown<=0 ? findV18LGiriOkiBomb(currentEvents) : null;
-      if(giri && placeEnemyBomb(giri)) {
-        v60PlacedBomb=true;
-        const step=giri.giriEscape;
-        const post=getTimedBombEvents();
-        if(enemyCanMove(step.x,step.y,post,1) &&
-           !isTileDangerDuring(step.x,step.y,0,ENEMY_STEP_MS+45,post)){
-          enemy.x=step.x;enemy.y=step.y;
-          v74CommittedAssault=true;
-          if(giri.giriFastRoute){
-            v18GiriFastPlan={placedAt:replayClock,nextIndex:1,
-              steps:[giri.giriFastRoute.first,giri.giriFastRoute.second,
-                     giri.giriFastRoute.third]};
-          }
-        }
-        replayRecordDecision('giri_oki_bomb',{
-          currentThreat,isImminentDanger,placed:true,
-          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
-          chainMs:giri.v18LGiri.chainMs,activeBombs:bombs.length});
-      } else if (!mustEvade) {
-        // 1. 危険な爆風が届く前でも、設置後の生存を検証できた爆弾は優先する。
-        let placed = false;
-        let attackAction = 'ultra_attack_move';
-        if (enemyBombCooldown <= 0) {
-          const v16PressureBomb=findV16HumanPressureBomb();
-          const offsetFollowup = v16PressureBomb ? null : findV74VerifiedFollowup(currentEvents);
-          const surprise = (v16PressureBomb || offsetFollowup) ? null : findV69LateSurpriseBomb();
-          const counter = (v16PressureBomb || offsetFollowup || surprise) ? null :
-            findEnemyCounterBomb(currentEvents);
-          const preferred = v16PressureBomb || offsetFollowup || surprise || counter?.evaluation || null;
-          if (preferred) {
-            placed = placeEnemyBomb(preferred);
-            if (placed) {
-              attackAction = v16PressureBomb ? 'human_pressure_chain_bomb' :
-                offsetFollowup ? 'offset_volley_bomb' :
-                surprise ? 'late_chain_bomb' : 'counter_bomb';
-              if (counter && !offsetFollowup && !surprise)
-                lastEnemyCounterBombAt = replayClock;
-            }
-          }
-          if (!placed) {
-            placed = placeEnemyBomb();
-            if (placed) attackAction = 'ultra_attack_bomb';
-          }
-        }
-        v60PlacedBomb = !!placed;
-
-        // 2. 爆弾を置いたターンも止まらず、攻撃地点へ1マス移動する。
-        // move -> plant も許すが、実際の移動先から最後まで生存できる
-        // 経路を確認する。事前検証と実際の設置判断を決して迂回しない。
-        const attackStep = findBestTacticalAttackStep();
-        const interceptStep = attackStep && replayClock < V55_STALEMATE_MS ?
-          null : findEnemyInterceptStep(attackStep);
-        const approach = (attackStep || interceptStep) ? null : findApproachStep();
-        const desired = interceptStep || attackStep || approach;
-        const containmentStep = findV56ContainmentStep(desired, attackStep);
-        const pressureStep = !placed ? findV16PressureApproach(currentEvents) : null;
-        let chosen = pressureStep || chooseEnemyStrategicStep(containmentStep || desired);
-        const postBombEvents = getTimedBombEvents();
-        const isLegalAdjacent = p => !!p &&
-          Math.abs(p.x - enemy.x) + Math.abs(p.y - enemy.y) <= 1 &&
-          (p.x === enemy.x && p.y === enemy.y ||
-            enemyCanMove(p.x, p.y, postBombEvents, 1));
-        const isVerifiedSurvivable = p => {
-          if (!isLegalAdjacent(p)) return false;
-          if (isTileDangerDuring(p.x, p.y, 0,
-              ENEMY_STEP_MS + 45, postBombEvents)) return false;
-          if (!bombs.length) return true;
-          if (!v16HumanCounterBombSafe(p))return false;
-          const previousEscapeGoal = enemyEscapeGoal;
-          const route = findTimedSafeStep(p.x, p.y, null, null, 1);
-          enemyEscapeGoal = previousEscapeGoal;
-          return !!route;
-        };
-
-        let moved = false;
-        if (chosen && isVerifiedSurvivable(chosen)) {
-          moved = chosen.x !== enemy.x || chosen.y !== enemy.y;
-          enemy.x = chosen.x;
-          enemy.y = chosen.y;
-          if (moved) {
-            v74CommittedAssault = true;
-            replayLog('ai_ultra_attack_step', {
-              from: previousEnemyPosition, to: {x:enemy.x,y:enemy.y},
-              placedFirst: placed, threatened: currentThreat });
-          }
-          // 3. このターンに設置していなければ移動先でも設置を試す。
-          // クールタイムは変えないため、同じターンでの二重設置はしない。
-          if (!placed && moved && enemyBombCooldown <= 0) {
-            const chainAtStep=pressureStep && pressureStep.x===enemy.x &&
-              pressureStep.y===enemy.y ? findV16HumanPressureBomb() : null;
-            placed = chainAtStep ? placeEnemyBomb(chainAtStep) : placeEnemyBomb();
-            if (placed) {
-              v60PlacedBomb = true;
-              attackAction = chainAtStep ? 'human_pressure_after_move_bomb' :
-                'ultra_attack_after_move_bomb';
-            }
-          }
-        } else if (currentThreat && verifiedEscape) {
-          // 攻撃方向が危険なら、攻撃を優先しても安全な脱出路は捨てない。
-          enemy.x = verifiedEscape.x;
-          enemy.y = verifiedEscape.y;
-          v18EscapingThisTick=true;
-          replayLog('ai_ultra_attack_escape', {
-            from:previousEnemyPosition, to:{x:enemy.x,y:enemy.y},
-            reason:'attack_route_not_survivable'});
-        }
-        replayRecordDecision(attackAction, {
-          currentThreat, isImminentDanger, placed,
-          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
-          activeBombs:bombs.length});
-      } else {
-        v18EscapingThisTick=true;
-        // 750ms以内に爆風が来る場合、または安全な攻撃継続がない場合の回避。
-        if (!escapeDiagnostics) escapeDiagnostics = {};
-        const safeStep = verifiedEscape ||
-          findAdaptiveTimedSafeStep(enemy.x, enemy.y, escapeDiagnostics);
-        v69VerifiedEscape = safeStep;
-        v60SavedEscapeDiagnostics = escapeDiagnostics;
-        if (safeStep) {
-          let chosen = chooseOffensiveEscapeStep(safeStep,
-            escapeDiagnostics, currentEvents);
-          chosen = findV59SaferEscapeStep(chosen, escapeDiagnostics);
-          chosen = findV74AttackEscapeStep(chosen,
-            escapeDiagnostics, currentEvents);
-          enemy.x = chosen.x;
-          enemy.y = chosen.y;
-        } else {
-          const emergency = escapeDiagnostics.partialFirstAction ||
-            findEmergencyStep();
-          if (emergency) {
-            enemy.x = emergency.x;
-            enemy.y = emergency.y;
-          }
-          replayLog('escape_failed', {
-            at:previousEnemyPosition, emergency,
-            usedPartialRoute:!!escapeDiagnostics.partialFirstAction,
-            activeBombs:bombs.length, diagnostics:escapeDiagnostics});
-        }
-        replayRecordDecision('escape', {
-          currentThreat, isImminentDanger, safeStep,
-          from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
-          escapeDiagnostics,activeBombs:bombs.length});
-      }
-    }
-
-    // v60: Run the refuge test on a genuine, existing-bomb-safe set of
-    // first actions. The same final safety guard below still applies.
-    const v60Hostile=bombs.filter(b=>b.owner==='player').length;
-    const v60Distance=Math.abs(previousEnemyPosition.x-player.x)+
-      Math.abs(previousEnemyPosition.y-player.y);
-    // v69: A known-safe escape must not be changed at the end of the tick
-    // by a purely speculative refuge score. v59 has already applied any
-    // VERIFIED better first-step while threat handling was active.
-    if(!currentThreat && !v60PlacedBomb && !v74CommittedAssault && v60Hostile>=2 && v60Hostile<=8 &&
-       v60Distance<=9 && enemy.alive){
-      let diag=v60SavedEscapeDiagnostics;
-      if(!diag && !currentThreat){
-        diag={};
-        const savedGoal=enemyEscapeGoal;
-        v70UnthreatenedPlan=findAdaptiveTimedSafeStep(
-          previousEnemyPosition.x,previousEnemyPosition.y,diag);
-        v60SavedEscapeDiagnostics=diag;
-        enemyEscapeGoal=savedGoal;
-      }
-      // Do not override an emergency move when even the real-bomb planner
-      // could not identify a full-horizon survival route.
-      if(diag && (diag.viableFirstSteps||[]).length>=2){
-        const improved=findV60ResilientRefugeStep(previousEnemyPosition,
-          {x:enemy.x,y:enemy.y},diag,getTimedBombEvents());
-        enemy.x=improved.x;enemy.y=improved.y;
-      }
-    }
-
-    // v69: Preserve a full-horizon verified departure when an intermediary
-    // heuristic sends the AI back to its origin or reverses the last move
-    // just as an explosion approaches. No new pathfinding required.
-    if(currentThreat && !v60PlacedBomb && v69VerifiedEscape &&
-       (v69VerifiedEscape.x!==previousEnemyPosition.x ||
-        v69VerifiedEscape.y!==previousEnemyPosition.y)) {
-      const soonest=Math.min(Infinity,...currentEvents.map(e=>e.time));
-      const isWait=enemy.x===previousEnemyPosition.x && enemy.y===previousEnemyPosition.y;
-      const isReverse=enemyLastPosition && enemy.x===enemyLastPosition.x &&
-        enemy.y===enemyLastPosition.y &&
-        (v69VerifiedEscape.x!==enemyLastPosition.x ||
-         v69VerifiedEscape.y!==enemyLastPosition.y);
-      if((soonest<=1550 || bombs.filter(b=>b.owner==='player').length>=2) &&
-         (isWait || isReverse)) {
-        replayLog('ai_v69_escape_lock',{
-          from:previousEnemyPosition,overridden:{x:enemy.x,y:enemy.y},
-          restored:v69VerifiedEscape,reason:isWait?'prevent_wait':'prevent_reverse',
-          nextBlastMs:Math.round(soonest)});
-        enemy.x=v69VerifiedEscape.x;
-        enemy.y=v69VerifiedEscape.y;
-      }
-    }
-
-    // v70: One final arbiter for REAL-bomb-safe first actions.  In the
-    // unthreatened branch the v60 guard has ALREADY run a complete timed
-    // search; reuse its first-step set rather than adding another search.
-    // Hypothetical next bombs may *rank* viable options, never invent one.
-    const v70Hostiles=bombs.filter(b=>b.owner==='player').length;
-    const v70PlayerDistance=Math.abs(previousEnemyPosition.x-player.x)+
-      Math.abs(previousEnemyPosition.y-player.y);
-    if(!currentThreat && !v60PlacedBomb && !v74CommittedAssault &&
-       v70Hostiles>=2 && v70Hostiles<=8 && v70PlayerDistance<=9 &&
-       v60SavedEscapeDiagnostics && v70UnthreatenedPlan) {
-      const viable=(v60SavedEscapeDiagnostics.viableFirstSteps||[]).filter(p=>
-        !isTileDangerDuring(p.x,p.y,0,ENEMY_STEP_MS+45,currentEvents));
-      if(viable.length) {
-        const from=previousEnemyPosition;
-        const proposed={x:enemy.x,y:enemy.y};
-        const includes=(p)=>viable.some(q=>q.x===p.x&&q.y===p.y);
-        const wait=proposed.x===from.x&&proposed.y===from.y;
-        const reverse=enemyLastPosition && proposed.x===enemyLastPosition.x&&
-          proposed.y===enemyLastPosition.y;
-        const fromRisk=getEnemyPositionRisk(from.x,from.y);
-        const vulnerable=(fromRisk.edgeDistance===0 ||
-          getEnemyCorridorRisk(from.x,from.y)>=15 || fromRisk.exits<=2);
-        const risk=(p)=>{
-          const pos=getEnemyPositionRisk(p.x,p.y);
-          const d=Math.abs(p.x-player.x)+Math.abs(p.y-player.y);
-          return pos.score*0.8+getEnemyPlayerTrapRisk(p.x,p.y)*0.8+
-            getEnemyCorridorRisk(p.x,p.y)*0.65+
-            (pos.edgeDistance===0?18:pos.edgeDistance===1?4:0)+
-            Math.max(0,5-d)*2+
-            (enemyLastPosition&&p.x===enemyLastPosition.x&&p.y===enemyLastPosition.y?7:0);
-        };
-        let replacement=null, reason=null;
-        if(!includes(proposed)) {
-          replacement=v70UnthreatenedPlan;
-          reason='unverified_strategic_step';
-        } else if(wait && vulnerable) {
-          // A corridor/outer-wall wait is easy to close with the next human
-          // bomb. Depart only along a known survivable first step, not into
-          // a narrower lane for the sake of motion itself.
-          const moving=viable.filter(p=>p.x!==from.x||p.y!==from.y);
-          moving.sort((a,b)=>risk(a)-risk(b));
-          const option=moving.find(p=>{
-            const r=getEnemyPositionRisk(p.x,p.y);
-            return r.edgeDistance>fromRisk.edgeDistance ||
-              r.exits>fromRisk.exits ||
-              (r.openArea>=fromRisk.openArea+2 && risk(p)<risk(proposed));
-          });
-          if(option && risk(option)<=risk(proposed)+7) {
-            replacement=option;
-            reason='leave_blockable_wait';
-          }
-        } else if(reverse && viable.length>=2) {
-          const alternate=viable.filter(p=>
-            !(enemyLastPosition && p.x===enemyLastPosition.x&&p.y===enemyLastPosition.y) &&
-            !(p.x===from.x&&p.y===from.y)).sort((a,b)=>risk(a)-risk(b))[0];
-          if(alternate && risk(alternate)<=risk(proposed)+3) {
-            replacement=alternate;
-            reason='avoid_unnecessary_reverse';
-          }
-        }
-        if(replacement && includes(replacement) &&
-           (replacement.x!==proposed.x||replacement.y!==proposed.y)) {
-          enemy.x=replacement.x;enemy.y=replacement.y;
-          replayLog('ai_v70_route_arbitration',{
-            from,overridden:proposed,to:replacement,reason,
-            viableSteps:viable.length,hostileBombs:v70Hostiles});
-        }
-      }
-    }
-
-    // v18: Preserve first-step proofs even after a v15 pursuit override.
-    // v28 already computed the expensive search in crowded human-bomb scenes.
-    const v18Before={x:enemy.x,y:enemy.y};
-    const v18Safe=v18ArbitrateFirstStep(previousEnemyPosition,
-      v18Before,getTimedBombEvents());
-    enemy.x=v18Safe.x;enemy.y=v18Safe.y;
-    if(v18Safe.x!==v18Before.x || v18Safe.y!==v18Before.y)
-      v18EscapingThisTick=true;
-
-    // v10最終防護: 移動先が次のAI判断までに爆発する場合は移動を取り消す。
-    // この検査は既存の連鎖爆発も対象。現在地が危険でも、移動先が
-    // さらに危険な場合は前の位置に留まる（緊急回避は別途実行）。
-    const changedPosition = enemy.x !== previousEnemyPosition.x || enemy.y !== previousEnemyPosition.y;
-    // v67: The final real-bomb timeline does not change while recovering
-    // from an unsafe step. All alternate tiles share the same events.
-    const finalMoveEvents = changedPosition ? getTimedBombEvents() : null;
-    if (changedPosition && isTileDangerDuring(enemy.x, enemy.y, 0,
-          ENEMY_STEP_MS + 35, finalMoveEvents)) {
-      replayLog("unsafe_move_blocked", { from: previousEnemyPosition,
-        attempted: {x:enemy.x,y:enemy.y}, reason:"blast_before_next_ai_tick" });
-      const safeAlternative = [[0,-1],[0,1],[-1,0],[1,0],[0,0]]
-        .map(([dx,dy])=>({x:previousEnemyPosition.x+dx,y:previousEnemyPosition.y+dy}))
-        .filter(p=>p.x>=0&&p.y>=0&&p.x<COLS&&p.y<ROWS && map[p.y][p.x]===0)
-        .filter(p=>!(player.alive&&player.x===p.x&&player.y===p.y))
-        .filter(p=>!(p.x!==previousEnemyPosition.x||p.y!==previousEnemyPosition.y) ||
-          !bombs.some(b=>b.x===p.x&&b.y===p.y))
-        .filter(p=>!isTileDangerDuring(p.x,p.y,0,ENEMY_STEP_MS+35,finalMoveEvents));
-      // 移動可能な候補が複数あるときは、出口の多いマスを優先する。
-      safeAlternative.sort((a,b)=>
-        getEnemyPositionRisk(a.x,a.y).score-getEnemyPositionRisk(b.x,b.y).score ||
-        enemyEscapeMobility(b.x,b.y)-enemyEscapeMobility(a.x,a.y));
-      if (safeAlternative.length) {
-        enemy.x=safeAlternative[0].x;
-        enemy.y=safeAlternative[0].y;
-      } else {
-        enemy.x=previousEnemyPosition.x;
-        enemy.y=previousEnemyPosition.y;
-      }
-      replayLog("unsafe_move_recovered", {to:{x:enemy.x,y:enemy.y},
-        candidateCount:safeAlternative.length});
-    }
-    // v18: Only remember actual emergency retreats, not elective flanks;
-    // expire after a few AI steps or if human bombs disappear.
-    if(v18EscapingThisTick && bombs.some(b=>b.owner==='player') &&
-       (enemy.x!==previousEnemyPosition.x || enemy.y!==previousEnemyPosition.y)) {
-      v18RetreatMemory={from:previousEnemyPosition,to:{x:enemy.x,y:enemy.y},
-        until:replayClock+380};
-    } else if(v18RetreatMemory && (replayClock>=v18RetreatMemory.until ||
-        !bombs.some(b=>b.owner==='player'))){
-      v18RetreatMemory=null;
-    }
-    enemyVisual = animateVisualPosition(enemyVisual, enemy.x, enemy.y, ENEMY_VISUAL_MOVE_MS);
-    enemyLastPosition = previousEnemyPosition;
-    if (!currentThreat) enemyEscapeGoal = null;
-    replayLog("enemy_step", { from: previousEnemyPosition, to: { x: enemy.x, y: enemy.y } });
-    replaySnapshot("ai_tick");
-    enemyMoveTimer = ENEMY_THINK_INTERVAL;
-  }
-
-
+    v17TimelineCache = new Map();
+    if (activeAiMode === 'warp') warpThink();
+    else if (activeAiMode === 'ec') ecThink();
+    else laneThink();
   }
 
   // Explosion may alter the terrain; never carry cached blast cells past it.
@@ -5579,35 +5920,18 @@ function update(dt) {
     flame.cells.some(([x, y]) => x === enemy.x && y === enemy.y)
   );
 
-  if (playerHit) {
-    const by=Array.from(new Set(flames.filter(flame=>
-      flame.cells.some(([x,y])=>x===player.x&&y===player.y))
-      .map(flame=>flame.owner||'unknown')));
-    player.alive=false;
-    replayLog('player_hit', {x:player.x,y:player.y,hitBy:by});
-  }
-  if (enemyHit) {
-    const by=Array.from(new Set(flames.filter(flame=>
-      flame.cells.some(([x,y])=>x===enemy.x&&y===enemy.y))
-      .map(flame=>flame.owner||'unknown')));
-    enemy.alive=false;
-    replayLog('enemy_hit',{x:enemy.x,y:enemy.y,hitBy:by});
-  }
-  if (playerHit || enemyHit) replaySnapshot("hit");
+  if (playerHit) player.alive = false;
+  if (enemyHit) enemy.alive = false;
 
-  // Compact victory feedback; no replay creation, storage, or downloads.
-  if (!player.alive || !enemy.alive) {
+  if (!player.alive && !enemy.alive) {
+    message.textContent = "引き分け！ 再戦でもう一度";
     gameOver = true;
-    const outcome = !player.alive && !enemy.alive ? "draw" : !player.alive ? "lose" : "win";
-    message.textContent = outcome === "win" ? `勝利！ ${AI_BUILD_VERSION} に勝ちました` :
-      outcome === "lose" ? `敗北！ ${AI_BUILD_VERSION} の勝ちです` : "引き分け！";
-    const resultMark = document.getElementById("result-mark");
-    if (resultMark) {
-      resultMark.textContent = outcome === "win" ? "WIN" : outcome === "lose" ? "LOSE" : "DRAW";
-      resultMark.dataset.result = outcome;
-      resultMark.hidden = false;
-    }
-    if (typeof updateMatchStatus === "function") updateMatchStatus();
+  } else if (!player.alive) {
+    message.textContent = "敗北！ 再戦でもう一度";
+    gameOver = true;
+  } else if (!enemy.alive) {
+    message.textContent = "勝利！ 再戦でもう一度";
+    gameOver = true;
   }
 }
 
@@ -5661,6 +5985,16 @@ function draw() {
     }
   }
 
+  // Warpの瞬間移動は短い紫の残像で示す。ヒット判定には影響しない。
+  if (activeAiMode === 'warp' && warpEffect && warpEffect.remaining > 0) {
+    const alpha=Math.min(1,warpEffect.remaining/370);
+    for (const [p,radius] of [[warpEffect.from,0.35],[warpEffect.to,0.45]]) {
+      ctx.strokeStyle=`rgba(190,115,255,${alpha*0.92})`;
+      ctx.lineWidth=3;
+      ctx.beginPath();ctx.arc(p.x*TILE+TILE/2,p.y*TILE+TILE/2,TILE*radius,0,Math.PI*2);ctx.stroke();
+    }
+  }
+
   // プレイヤー：青
   if (player.alive) {
     ctx.fillStyle = "#38bdf8";
@@ -5679,9 +6013,10 @@ function draw() {
     ctx.fillRect(pVisual.x * TILE + 19, pVisual.y * TILE + 9, 4, 4);
   }
 
-  // 敵：赤
-  if (enemy.alive) {
-    ctx.fillStyle = "#f87171";
+  // CP1/EC1は赤、Warpだけ紫。Stealthではキャラクターを描画しない。
+  // 爆弾・爆風の表示は従来どおり。
+  if (enemy.alive && activeAiMode !== "stealth") {
+    ctx.fillStyle = activeAiMode === 'warp' ? "#a855f7" : "#f87171";
     ctx.beginPath();
     ctx.arc(
       eVisual.x * TILE + TILE / 2,
@@ -5742,7 +6077,7 @@ window.addEventListener("blur", () => {
 
 
 // The strategy selector switches only the opponent decision loop.
-// Both strategies share the same map, bomb logic, input and replay system.
+// Both strategies share the same map, bomb logic, input and game rules.
 function setupOpponentSelector() {
   const restart = document.getElementById('restart');
   if (!restart) return;
@@ -5756,7 +6091,7 @@ function setupOpponentSelector() {
     title.textContent = '対戦するAI';
     select = document.createElement('select');
     select.id = 'ai-opponent-select';
-    for (const [value, caption] of [['lg5','v18-LG5'], ['lane','v4.4-CP1']]) {
+    for (const [value, caption] of [['lane','CP'], ['ec','EC'], ['stealth','Stealth'], ['warp','Warp']]) {
       const opt = document.createElement('option');
       opt.value = value;
       opt.textContent = caption;
@@ -5782,17 +6117,19 @@ function setupOpponentSelector() {
   document.head.appendChild(css);
   select.value = activeAiMode;
   select.addEventListener('change', () => {
-    const chosen = select.value === 'lane' ? 'lane' : 'lg5';
+    const chosen = ['lane','ec','stealth','warp'].includes(select.value) ? select.value : 'lane';
     if (chosen === activeAiMode) return;
     activeAiMode = chosen;
-    AI_BUILD_VERSION = chosen === 'lg5' ? LG5_BUILD_VERSION : LANE_BUILD_VERSION;
+    AI_BUILD_VERSION = chosen === 'ec' ? EC_BUILD_VERSION
+      : chosen === 'stealth' ? STEALTH_BUILD_VERSION
+      : chosen === 'warp' ? WARP_BUILD_VERSION : LANE_BUILD_VERSION;
     heldKeys.clear();
     gamepadKeys.clear();
     if (typeof releaseStick === 'function') releaseStick();
     const brand = document.querySelector('.brand .version');
-    if (brand) brand.textContent = chosen === 'lg5' ? 'VS AI v18-LG5' : 'VS ' + LANE_BUILD_VERSION;
+    if (brand) brand.textContent = 'VS ' + aiDisplayName();
     const legend = document.getElementById('opponent-legend');
-    if (legend) legend.textContent = '赤：' + (chosen === 'lg5' ? 'AI v18-LG5' : LANE_BUILD_VERSION);
+    if (legend) legend.textContent = (chosen === 'stealth' ? '透明：' : chosen === 'warp' ? '紫：' : '赤：') + aiDisplayName();
     showOkibonBuildVersion();
     resetGame();
   });
@@ -5804,114 +6141,106 @@ setupOpponentSelector();
 resetGame();
 requestAnimationFrame(loop);
 
+</script>
+<script>
+// Standalone mobile touch controls; only gameplay input is forwarded.
+// Keep the joystick anchored (not floating), and only send existing player inputs.
+(() => {
+  'use strict';
+  const stick = document.getElementById('joystick');
+  const thumb = document.getElementById('stick-thumb');
+  const bomb = document.getElementById('bomb-button');
+  const directions = ['arrowup','arrowdown','arrowleft','arrowright'];
+  let stickPointer = null;
+  let bombPointer = null;
+  let currentDirection = '';
 
-// Disable Safari's long-press text-selection and callout actions on controls.
-for (const eventName of ["contextmenu", "selectstart", "dragstart"]) {
-  document.addEventListener(eventName, event => {
-    if (event.target?.closest?.("#move-stick, #bomb-control")) event.preventDefault();
-  }, {capture:true});
-}
-for (const control of document.querySelectorAll("#move-stick, #bomb-control")) {
-  control.addEventListener("touchstart", event => event.preventDefault(), {passive:false});
-  control.addEventListener("touchmove", event => event.preventDefault(), {passive:false});
-}
+  function setDirection(next) {
+    if (currentDirection === next) return;
+    for (const direction of directions) heldKeys.delete(direction);
+    if (next) heldKeys.add(next);
+    currentDirection = next;
+    // Directly reuse the game's existing 120ms movement cadence.
+  }
 
-// One pointer owns the stick. A second pointer can independently press BOMB.
-// Pointer capture permits drags beyond the circular base without losing control.
-const mobileSteps = {
-  arrowup: [0,-1], arrowdown: [0,1], arrowleft: [-1,0], arrowright: [1,0]
-};
-const stick = document.getElementById("move-stick");
-const knob = document.getElementById("stick-knob");
-const STICK_DEAD_ZONE = 0.20;
-const STICK_KNOB_TRAVEL = 0.42; // fraction of the base diameter
-function aimStick(clientX, clientY) {
-  if (!stick || joystickPointerId === null) return;
-  const rect = stick.getBoundingClientRect();
-  const radius = Math.min(rect.width,rect.height)/2;
-  if (radius <= 0) return;
-  const centerX = rect.left + rect.width/2;
-  const centerY = rect.top + rect.height/2;
-  let dx = (clientX-centerX)/radius;
-  let dy = (clientY-centerY)/radius;
-  const magnitude = Math.hypot(dx,dy);
-  const factor = magnitude > 1 ? 1/magnitude : 1;
-  dx *= factor; dy *= factor;
-  // Visual position follows the finger, while movement remains grid-based.
-  const travel = radius * STICK_KNOB_TRAVEL;
-  if (knob) knob.style.transform = `translate(-50%, -50%) translate(${(dx*travel).toFixed(1)}px, ${(dy*travel).toFixed(1)}px)`;
-  let direction = null;
-  if (magnitude >= STICK_DEAD_ZONE) {
-    if (Math.abs(dx) >= Math.abs(dy)) direction = dx >= 0 ? "arrowright" : "arrowleft";
-    else direction = dy >= 0 ? "arrowdown" : "arrowup";
+  function moveThumb(event) {
+    const rect = stick.getBoundingClientRect();
+    const centerX = rect.left + rect.width/2;
+    const centerY = rect.top + rect.height/2;
+    const dx = event.clientX - centerX;
+    const dy = event.clientY - centerY;
+    const distance = Math.hypot(dx,dy);
+    const maxTravel = Math.min(rect.width,rect.height)*0.28;
+    const factor = distance > maxTravel ? maxTravel/distance : 1;
+    thumb.style.transform = `translate(${Math.round(dx*factor)}px,${Math.round(dy*factor)}px)`;
+    const deadZone = Math.min(rect.width,rect.height)*0.1;
+    if (distance < deadZone) setDirection('');
+    else if (Math.abs(dx) > Math.abs(dy)) setDirection(dx>0?'arrowright':'arrowleft');
+    else setDirection(dy>0?'arrowdown':'arrowup');
   }
-  const previous = joystickDirection;
-  joystickDirection = direction;
-  // An analog-stick turn should not keep moving along the previous axis.
-  if (previous && direction && previous !== direction)
-    playerMoveTimer = Math.min(playerMoveTimer, 35);
-  if (!direction) {
-    if (previous) playerMoveTimer = 0;
-    return;
+
+  function releaseStick() {
+    stickPointer = null;
+    setDirection('');
+    thumb.style.transform = 'translate(0px,0px)';
   }
-  // First movement is immediate instead of waiting for the animation frame.
-  if (!previous && playerMoveTimer <= 0 && !gameOver) {
-    const [stepX,stepY] = mobileSteps[direction];
-    movePlayer(stepX,stepY);
-    playerMoveTimer = PLAYER_MOVE_INTERVAL;
-  }
-}
-function releaseStick() {
-  joystickPointerId = null;
-  joystickDirection = null;
-  playerMoveTimer = 0;
-  if (knob) knob.style.transform = "translate(-50%, -50%)";
-  if (stick) stick.classList.remove("active");
-}
-if (stick) {
-  stick.addEventListener("pointerdown", event => {
-    if (gameOver || joystickPointerId !== null) return;
+  // The selector already supports calling releaseStick() where available.
+  // Expose only the release hook; keep gameplay strategy in game.js.
+  window.releaseStick = releaseStick;
+
+  stick.addEventListener('pointerdown', event => {
+    if (stickPointer !== null) return;
     event.preventDefault();
-    joystickPointerId = event.pointerId;
-    stick.classList.add("active");
-    try { stick.setPointerCapture?.(event.pointerId); } catch (_) {}
-    aimStick(event.clientX,event.clientY);
+    stickPointer = event.pointerId;
+    try { stick.setPointerCapture(event.pointerId); } catch (_) {}
+    moveThumb(event);
   });
-  stick.addEventListener("pointermove", event => {
-    if (event.pointerId !== joystickPointerId) return;
+  stick.addEventListener('pointermove', event => {
+    if (stickPointer !== event.pointerId) return;
     event.preventDefault();
-    aimStick(event.clientX,event.clientY);
+    moveThumb(event);
   });
-  for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"])
-    stick.addEventListener(eventName, event => {
-      if (event.pointerId === joystickPointerId) releaseStick();
-    });
-}
-const bombBtn = document.getElementById("bomb-control");
-if (bombBtn) {
-  bombBtn.addEventListener("pointerdown", event => {
-    if (gameOver) return;
+  function endStick(event) {
+    if (stickPointer !== event.pointerId) return;
+    releaseStick();
+  }
+  stick.addEventListener('pointerup',endStick);
+  stick.addEventListener('pointercancel',endStick);
+  stick.addEventListener('lostpointercapture',endStick);
+
+  bomb.addEventListener('pointerdown', event => {
+    if (bombPointer !== null) return;
     event.preventDefault();
-    try { bombBtn.setPointerCapture?.(event.pointerId); } catch (_) {}
-    bombBtn.classList.add("pressed");
+    bombPointer = event.pointerId;
+    bomb.classList.add('pressed');
+    try { bomb.setPointerCapture(event.pointerId); } catch (_) {}
     requestBomb();
   });
-  for (const name of ["pointerup","pointercancel","lostpointercapture"])
-    bombBtn.addEventListener(name, () => bombBtn.classList.remove("pressed"));
-}
-window.addEventListener("blur", () => {
-  releaseStick();
-  heldKeys.clear();
-  document.querySelectorAll(".pressed").forEach(button => button.classList.remove("pressed"));
-});
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) {
-    releaseStick();
-    heldKeys.clear();
-    document.querySelectorAll(".pressed").forEach(button => button.classList.remove("pressed"));
+  function releaseBomb(event) {
+    if (bombPointer !== event.pointerId) return;
+    bombPointer = null;
+    bomb.classList.remove('pressed');
   }
-});
+  bomb.addEventListener('pointerup',releaseBomb);
+  bomb.addEventListener('pointercancel',releaseBomb);
+  bomb.addEventListener('lostpointercapture',releaseBomb);
+  // Suppress synthetic clicks after the pointer event, avoiding duplicate bombs.
+  bomb.addEventListener('click',event => event.preventDefault());
+
+  const releaseInputs = () => {
+    releaseStick();
+    bombPointer = null;
+    bomb.classList.remove('pressed');
+  };
+  window.addEventListener('blur',releaseInputs);
+  document.addEventListener('visibilitychange',() => { if(document.hidden) releaseInputs(); });
+  document.addEventListener('contextmenu', event => {
+    if(event.target.closest('.controls')) event.preventDefault();
+  });
+})();
 
 </script>
+
+
 </body>
 </html>
