@@ -18,7 +18,14 @@ button, .joystick, .bomb-button, .board { -webkit-user-select:none; user-select:
 main { max-width:510px; margin:0 auto; }
 .brand { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:1px 4px 9px; }
 .brand .name { font-size:20px; font-weight:850; letter-spacing:.01em; }
-.brand .version { font-size:12px; background:#20374e; color:#b8e4ff; padding:6px 10px; border-radius:999px; white-space:nowrap; font-weight:700; }
+/* Opponent selector belongs in the top-right header, away from the touch controls. */
+.brand .ai-mode-picker { display:flex; align-items:center; gap:7px; flex:0 0 auto;
+  font-size:12px; color:#cfe1f1; font-weight:750; }
+.brand .ai-mode-picker select { width:124px; max-width:40vw; min-height:40px;
+  border:1px solid #7295b6; border-radius:9px; background:#19364f;
+  color:#fff; font:inherit; font-size:14px; font-weight:750; padding:8px 22px 8px 9px;
+  touch-action:manipulation; -webkit-user-select:auto; user-select:auto; }
+.brand .ai-mode-picker select:focus-visible { outline:2px solid #7ccfff; outline-offset:2px; }
 .board { border:1px solid #53667a; border-radius:12px; background:#29483d; overflow:hidden; line-height:0; touch-action:none; }
 #game { display:block; width:100%; height:auto; aspect-ratio:15/13; touch-action:none; }
 #message { text-align:center; font-size:15px; font-weight:800; min-height:24px; margin:9px 0 2px; }
@@ -39,12 +46,12 @@ main { max-width:510px; margin:0 auto; }
  touch-action:none; cursor:pointer; }
 .bomb-button:active, .bomb-button.pressed { transform:translateY(4px); box-shadow:0 3px 0 #762137; }
 .settings { border:1px solid #283b50; background:#151f30; border-radius:12px; margin:28px 0 10px; padding:13px; }
-.actions { display:grid; grid-template-columns:minmax(0,1fr) 1fr; gap:10px; align-items:end; }
-.actions .ai-mode-picker { grid-column:1; }
-#restart { grid-column:2; min-height:43px; }
+.actions { display:flex; justify-content:flex-end; align-items:center; }
+#restart { min-width:140px; min-height:43px; }
 button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; background:#28527b; color:#fff;
  border:1px solid #507fac; border-radius:9px; padding:10px 8px; min-height:42px; text-decoration:none; text-align:center; }
-@media (max-width:365px) { .joystick{width:138px;height:138px} .controls{min-height:160px;gap:24px} .bomb-button{width:94px;height:94px;font-size:17px} }
+@media (max-width:365px) { .joystick{width:138px;height:138px} .controls{min-height:160px;gap:24px} .bomb-button{width:94px;height:94px;font-size:17px}
+  .brand .name{font-size:18px} .brand .ai-mode-picker{gap:5px} .brand .ai-mode-picker select{width:105px} }
 @media (orientation:landscape) and (max-height:530px) {
   main { max-width:none; width:100%; }
   .brand { padding:0 2px 4px; }
@@ -75,7 +82,7 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
 </head>
 <body>
 <main>
-  <div class="brand"><span class="name">v18-LG5</span><span class="version">VS CP</span></div>
+  <div class="brand"><span class="name">v18-LG5</span><label class="ai-mode-picker" for="ai-opponent-select"><span>AI</span><select id="ai-opponent-select" aria-label="対戦するAI"><option value="lane">CP</option><option value="ec">EC</option><option value="stealth">Stealth</option><option value="warp">Warp</option></select></label></div>
   <div class="landscape-layout">
     <div class="game-column">
       <div class="board"><canvas id="game" width="480" height="416" aria-label="v18-LG5 ゲーム盤面"></canvas></div>
@@ -130,8 +137,6 @@ function aiDisplayName() {
 function showOkibonBuildVersion() {
   const opponentTag = document.getElementById('opponent-version-tag');
   if (opponentTag) opponentTag.textContent = '対戦相手 ' + aiDisplayName();
-  const mobileBadge = document.querySelector('.brand .version');
-  if (mobileBadge) mobileBadge.textContent = 'VS ' + aiDisplayName();
 }
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", showOkibonBuildVersion);
@@ -329,12 +334,15 @@ function canMove(x, y) {
 // Slightly diagonal touch inputs can otherwise point straight at a corridor wall.
 // Route correction is exclusively for the virtual stick; it does not alter
 // collision, movement speed, enemy decisions, bombs or gamepad controls.
+// Guided 4-direction input for the fixed iPhone stick. Do not change game physics.
+// (1) Slide along a passable corridor even with a small diagonal error.
+// (2) Pick up a deliberate diagonal lean at a junction, not only at ~36 degrees.
+// (3) After a turn, retain direction until the thumb angle changes or the way closes.
 function assistedStickStep() {
   const axes = touchStickAxes;
   if (!axes) return null;
   const ax = Math.abs(axes.x), ay = Math.abs(axes.y);
-  const major = Math.max(ax, ay), minor = Math.min(ax, ay);
-  if (major < 0.01) return {dx:0,dy:0};
+  if (Math.max(ax,ay) < 0.01) return {dx:0,dy:0};
   const horizontal = {dx:Math.sign(axes.x),dy:0};
   const vertical = {dx:0,dy:Math.sign(axes.y)};
   const primaryAxis = ax >= ay ? 'x' : 'y';
@@ -344,35 +352,34 @@ function assistedStickStep() {
     const d = direction(axis);
     return canMove(player.x + d.dx, player.y + d.dy);
   };
-  // Near-cardinal inputs stay cardinal. Only a meaningful diagonal component
-  // can be used as a fallback when the dominant direction is blocked.
-  const secondaryAllowed = minor >= 0.28 && minor >= major * 0.34;
   const mainOpen = canStep(primaryAxis);
-  const sideOpen = secondaryAllowed && canStep(otherAxis);
+  // A roughly 11-degree secondary angle is enough for corridor wall-sliding.
+  const secondaryOpen = Math.min(ax,ay) >= 0.19 && canStep(otherAxis);
 
   if (touchTurnLock) {
-    // Keep a completed corner turn stable while the same diagonal is held.
-    // This prevents zigzags through successive intersections.
-    const lockedMagnitude = touchTurnLock === 'x' ? ax : ay;
-    if (lockedMagnitude >= 0.28 && canStep(touchTurnLock))
+    const magnitude = touchTurnLock === 'x' ? ax : ay;
+    // Release on a real stick angle change (pointer handler), hitting a wall,
+    // or an intentional nearly cardinal input in the opposite axis.
+    if (magnitude >= 0.19 && canStep(touchTurnLock))
       return direction(touchTurnLock);
     touchTurnLock = null;
     touchTurnLockReference = null;
   }
-  if (!mainOpen && sideOpen) return direction(otherAxis);
+  if (!mainOpen && secondaryOpen) {
+    // The requested dominant axis is blocked: follow the passable lane.
+    return direction(otherAxis);
+  }
   if (!mainOpen) return {dx:0,dy:0};
 
-  // Crossing assist: when arriving at a junction from a straight passage,
-  // a strong diagonal lean toward the perpendicular lane requests that turn.
-  // A shallow lean continues straight; the user can always force a turn by
-  // pushing its axis more strongly. Only act where BOTH options are open.
-  if (sideOpen && minor >= 0.46 && minor >= major * 0.72) {
-    const priorAxis = playerDirX ? 'x' : playerDirY ? 'y' : null;
-    if (priorAxis === primaryAxis) {
-      touchTurnLock = otherAxis;
-      touchTurnLockReference = {x:axes.x,y:axes.y};
-      return direction(otherAxis);
-    }
+  // A turn is meaningful when the smaller component represents >= ~20deg,
+  // not the earlier ~36deg. Only turn if coming from a straight run along
+  // the dominant axis, and only if the perpendicular cell is traversable.
+  const minor = Math.min(ax,ay);
+  const previousAxis = playerDirX ? 'x' : playerDirY ? 'y' : null;
+  if (secondaryOpen && minor >= 0.34 && previousAxis === primaryAxis) {
+    touchTurnLock = otherAxis;
+    touchTurnLockReference = {x:axes.x,y:axes.y};
+    return direction(otherAxis);
   }
   return direction(primaryAxis);
 }
@@ -6139,42 +6146,8 @@ window.addEventListener("blur", () => {
 // The strategy selector switches only the opponent decision loop.
 // Both strategies share the same map, bomb logic, input and game rules.
 function setupOpponentSelector() {
-  const restart = document.getElementById('restart');
-  if (!restart) return;
-  const host = restart.parentElement;
-  let select = document.getElementById('ai-opponent-select');
-  if (!select) {
-    const wrapper = document.createElement('label');
-    wrapper.className = 'ai-mode-picker';
-    wrapper.setAttribute('for', 'ai-opponent-select');
-    const title = document.createElement('span');
-    title.textContent = '対戦するAI';
-    select = document.createElement('select');
-    select.id = 'ai-opponent-select';
-    for (const [value, caption] of [['lane','CP'], ['ec','EC'], ['stealth','Stealth'], ['warp','Warp']]) {
-      const opt = document.createElement('option');
-      opt.value = value;
-      opt.textContent = caption;
-      select.appendChild(opt);
-    }
-    wrapper.appendChild(title);
-    wrapper.appendChild(select);
-    host.insertBefore(wrapper, restart);
-  }
-  const css = document.createElement('style');
-  css.textContent = `
-    .ai-mode-picker { display:flex; flex-direction:column; gap:4px; min-width:0;
-      font:inherit; color:#d9e8f6; font-weight:700; font-size:12px; }
-    .ai-mode-picker select { min-height:38px; min-width:0; max-width:100%;
-      background:#1a344e; color:#fff; border:1px solid #7295b6; border-radius:8px;
-      padding:7px 8px; font:inherit; font-size:13px; touch-action:manipulation;
-      -webkit-user-select:auto; user-select:auto; }
-    .actions:has(.ai-mode-picker) { justify-content:space-between; gap:10px; flex-wrap:wrap; }
-    .actions:has(.ai-mode-picker) .ai-mode-picker { flex:1 1 150px; }
-    .actions:has(.ai-mode-picker) #restart { flex:0 0 auto; }
-    @media(max-width:385px) { .ai-mode-picker select { font-size:12px; } }
-  `;
-  document.head.appendChild(css);
+  const select = document.getElementById('ai-opponent-select');
+  if (!select) return;
   select.value = activeAiMode;
   select.addEventListener('change', () => {
     const chosen = ['lane','ec','stealth','warp'].includes(select.value) ? select.value : 'lane';
@@ -6186,8 +6159,6 @@ function setupOpponentSelector() {
     heldKeys.clear();
     gamepadKeys.clear();
     if (typeof releaseStick === 'function') releaseStick();
-    const brand = document.querySelector('.brand .version');
-    if (brand) brand.textContent = 'VS ' + aiDisplayName();
     const legend = document.getElementById('opponent-legend');
     if (legend) legend.textContent = (chosen === 'stealth' ? '透明：' : chosen === 'warp' ? '紫：' : '赤：') + aiDisplayName();
     showOkibonBuildVersion();
@@ -6233,7 +6204,7 @@ requestAnimationFrame(loop);
     const maxTravel = Math.min(rect.width,rect.height)*0.28;
     const factor = distance > maxTravel ? maxTravel/distance : 1;
     thumb.style.transform = `translate(${Math.round(dx*factor)}px,${Math.round(dy*factor)}px)`;
-    const deadZone = Math.min(rect.width,rect.height)*0.1;
+    const deadZone = Math.min(rect.width,rect.height)*0.065;
     if (distance < deadZone) {
       touchStickAxes = null;
       touchTurnLock = null;
@@ -6241,11 +6212,22 @@ requestAnimationFrame(loop);
       setDirection('');
     } else {
       const nextAxes = {x:dx/distance,y:dy/distance};
-      if (touchTurnLockReference &&
-          nextAxes.x*touchTurnLockReference.x + nextAxes.y*touchTurnLockReference.y < 0.92) {
-        // Finger has intentionally changed its angle since the turn.
-        touchTurnLock = null;
-        touchTurnLockReference = null;
+      if (touchTurnLock && touchTurnLockReference) {
+        const lockedComponent = touchTurnLock === 'x' ? nextAxes.x : nextAxes.y;
+        const originalComponent = touchTurnLock === 'x'
+          ? touchTurnLockReference.x : touchTurnLockReference.y;
+        const otherComponent = touchTurnLock === 'x' ? nextAxes.y : nextAxes.x;
+        const originalOther = touchTurnLock === 'x'
+          ? touchTurnLockReference.y : touchTurnLockReference.x;
+        // Keep the turn while the player leans MORE toward the new lane.
+        // Release when they deliberately lean back toward the original lane,
+        // reverse the locked axis, or switch the other axis strongly.
+        if (lockedComponent * originalComponent <= 0 ||
+            Math.abs(lockedComponent) < Math.abs(originalComponent) * 0.72 ||
+            (otherComponent * originalOther < 0 && Math.abs(otherComponent) > 0.43)) {
+          touchTurnLock = null;
+          touchTurnLockReference = null;
+        }
       }
       touchStickAxes = nextAxes;
       // Keep the old cardinal key as fallback metadata only; the main loop
