@@ -21,7 +21,7 @@ main { max-width:510px; margin:0 auto; }
 /* Opponent selector belongs in the top-right header, away from the touch controls. */
 .brand .ai-mode-picker { display:flex; align-items:center; gap:7px; flex:0 0 auto;
   font-size:12px; color:#cfe1f1; font-weight:750; }
-.brand .ai-mode-picker select { width:124px; max-width:40vw; min-height:40px;
+.brand .ai-mode-picker select { width:146px; max-width:39vw; min-height:40px;
   border:1px solid #7295b6; border-radius:9px; background:#19364f;
   color:#fff; font:inherit; font-size:14px; font-weight:750; padding:8px 22px 8px 9px;
   touch-action:manipulation; -webkit-user-select:auto; user-select:auto; }
@@ -62,7 +62,7 @@ main { max-width:510px; margin:0 auto; }
 button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; background:#28527b; color:#fff;
  border:1px solid #507fac; border-radius:9px; padding:10px 8px; min-height:42px; text-decoration:none; text-align:center; }
 @media (max-width:365px) { .joystick{width:124px;height:124px} .controls{min-height:142px;gap:24px} .bomb-button{width:84px;height:84px;font-size:15px}
-  .brand .name{font-size:18px} .brand .ai-mode-picker{gap:5px} .brand .ai-mode-picker select{width:105px} }
+  .brand .name{font-size:18px} .brand .ai-mode-picker{gap:5px} .brand .ai-mode-picker select{width:110px} }
 @media (orientation:landscape) and (max-height:530px) {
   main { max-width:none; width:100%; }
   .brand { padding:0 2px 4px; }
@@ -91,7 +91,7 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
 </head>
 <body>
 <main>
-  <div class="brand"><span class="name">v18-LG5</span><label class="ai-mode-picker" for="ai-opponent-select"><span>AI</span><select id="ai-opponent-select" aria-label="対戦するAI"><option value="lane">CP</option><option value="ec">EC</option><option value="stealth">Stealth</option><option value="warp">Warp</option></select></label></div>
+  <div class="brand"><span class="name">v18-LG5</span><label class="ai-mode-picker" for="ai-opponent-select"><span>敵 一覧</span><select id="ai-opponent-select" aria-label="敵 一覧"><option value="lane">CP</option><option value="ec">EC</option><option value="queen">Queen of Hearts</option><option value="stealth">King of Spades</option><option value="jack">Jack of Diamonds</option><option value="kingheart">King of Heart</option></select></label></div>
   <div class="landscape-layout">
     <div class="game-column">
       <div class="board"><canvas id="game" width="480" height="416" aria-label="v18-LG5 ゲーム盤面"></canvas><div id="result-mark" hidden aria-hidden="true"></div></div>
@@ -115,11 +115,14 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
 <script>
 
 // "v18-LG5" is the game title (legacy milestone). Selectable AIs are
-// CP1, EC1, Stealth (invisible CP1), and Warp (EC1 plus teleport). "lane"/"ec"
-// internal IDs remain unchanged to preserve the existing AI logic.
+// CP, EC, King of Spades (invisible CP), Jack of Diamonds (0.8s teleport),
+// Queen of Hearts (EC with tracking hearts), and King of Heart (CP with orb/charge). "lane"/"ec"
+// internal IDs remain unchanged for replay compatibility.
 const LANE_BUILD_VERSION = "v4.4-CP1";
-const STEALTH_BUILD_VERSION = "Stealth";
-const WARP_BUILD_VERSION = "Warp";
+const STEALTH_BUILD_VERSION = "King of Spades";
+const JACK_BUILD_VERSION = "Jack of Diamonds";
+const QUEEN_BUILD_VERSION = "Queen of Hearts";
+const KING_HEART_BUILD_VERSION = "King of Heart";
 let activeAiMode = 'lane';
 let AI_BUILD_VERSION = LANE_BUILD_VERSION;
 // Parameter search alters only tactical prioritization / admission criteria.
@@ -137,15 +140,19 @@ function v63PressurePhase() {
   // 開幕から常にプレッシャーフェーズを維持する
   return true; 
 }
-// Display names only. Historical build IDs remain stable.
+// Display names only. The historical build IDs and replay metadata stay stable.
 function aiDisplayName() {
   return activeAiMode === 'ec' ? 'EC'
-    : activeAiMode === 'stealth' ? 'Stealth'
-    : activeAiMode === 'warp' ? 'Warp' : 'CP';
+    : activeAiMode === 'stealth' ? 'King of Spades'
+    : activeAiMode === 'jack' ? 'Jack of Diamonds'
+    : activeAiMode === 'queen' ? 'Queen of Hearts'
+    : activeAiMode === 'kingheart' ? 'King of Heart' : 'CP';
 }
 function showOkibonBuildVersion() {
   const opponentTag = document.getElementById('opponent-version-tag');
   if (opponentTag) opponentTag.textContent = '対戦相手 ' + aiDisplayName();
+  const mobileBadge = document.querySelector('.brand .version');
+  if (mobileBadge) mobileBadge.textContent = 'VS ' + aiDisplayName();
 }
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", showOkibonBuildVersion);
@@ -158,11 +165,10 @@ const ctx = canvas.getContext("2d");
 const message = document.getElementById("message");
 
 const heldKeys = new Set();
-// Independent analog information for iPhone: only the touch stick uses assist.
-// Keyboard and gamepad keep their original exact four-direction behavior.
 let touchStickAxes = null;
 let touchTurnLock = null;
 let touchTurnLockReference = null;
+
 let playerMoveTimer = 0;
 const PLAYER_MOVE_INTERVAL = 120; // グリッド移動間隔（判定は従来どおり）
 const PLAYER_VISUAL_MOVE_MS = 105; // マス間の表示補間時間
@@ -216,11 +222,64 @@ let v69SurpriseRolls = new Map();
 let lastV69SurpriseAt = -Infinity;
 
 
-// Only game-clock and bomb-identity state are required for gameplay.
+// iPhone play-only build: no replay/recording or debug panels.
 let matchClock = 0;
 let nextBombId = 0;
-// EC attack logic needs the latest two real player movements, not a replay log.
+// Only the two latest actual player steps feed EC counter-bomb prediction.
 let recentPlayerMoves = [];
+// Queen's bombs move across the board, but keep the original 2s fuse.
+const QUEEN_HEART_STEP_MS = 180;
+const QUEEN_HEART_INITIAL_DELAY_MS = 300;
+const QUEEN_HEART_STOP_FUSE_MS = 280;
+// King of Heart: two separate skills. The orb is visually 2x2 tiles (four
+// tiles of area), aimed at the player's position when it is fired.
+const KING_ORB_COOLDOWN_MS = 5000;
+const KING_ORB_SPEED_PX_PER_SEC = 270;
+const KING_ORB_RADIUS_PX = 32;
+const KING_CHARGE_COOLDOWN_MS = 8000;
+const KING_CHARGE_STEP_MS = 65;
+const KING_CHARGE_POST_INVULN_MS = 1000;
+// The first flame hit removes the crown. The brief grace period prevents the
+// same 600ms flame from consuming both of King's two hit points.
+const KING_FIRST_HIT_GRACE_MS = 700;
+const KING_PHASE_TWO_MS = 30000;
+const KING_SECOND_PHASE_SPEED = 1.3;
+const KING_CROWN_FALL_MS = 900;
+const KING_CHARGE_HIT_FX_MS = 560;
+const KING_ORB_HIT_FX_MS = 840;
+let kingOrbs = [];
+let kingChargeHitEffects = [];
+let kingOrbHitEffects = [];
+let kingLastOrbAt = 0;
+let kingLastChargeAt = -Infinity;
+let kingCharge = null;
+let kingInvulnerableUntil = 0;
+let kingFirstHitGraceUntil = 0;
+let kingCrownFall = null;
+let kingPhaseTwoUntil = 0;
+function kingPhaseTwoActive(){
+  return activeAiMode==='kingheart' && enemy?.alive && enemy.hp===1 && matchClock < kingPhaseTwoUntil;
+}
+function kingMoveSpeedMultiplier(){
+  return activeAiMode==='kingheart' && enemy?.hp===1 ? KING_SECOND_PHASE_SPEED : 1;
+}
+function kingChargeCooldownMs(){
+  return kingPhaseTwoActive() ? 0 : KING_CHARGE_COOLDOWN_MS;
+}
+function kingReset() {
+  kingOrbs=[]; kingLastOrbAt=0; kingLastChargeAt=-Infinity;
+  kingCharge=null; kingInvulnerableUntil=0; kingFirstHitGraceUntil=0; kingCrownFall=null; kingPhaseTwoUntil=0; kingChargeHitEffects=[]; kingOrbHitEffects=[];
+}
+function kingImmune(){
+  return activeAiMode === 'kingheart' && (kingCharge!==null || kingPhaseTwoActive() || matchClock < kingInvulnerableUntil || matchClock < kingFirstHitGraceUntil);
+}
+function kingSpawnChargeHitEffect(x,y){
+  kingChargeHitEffects.push({x,y,remaining:KING_CHARGE_HIT_FX_MS});
+}
+function kingSpawnOrbHitEffect(x,y){
+  kingOrbHitEffects.push({x,y,remaining:KING_ORB_HIT_FX_MS});
+}
+
 
 function setResultMark(result) {
   const mark = document.getElementById('result-mark');
@@ -285,7 +344,8 @@ function resetGame() {
   enemy = {
     x: COLS - 2,
     y: ROWS - 2,
-    alive: true
+    alive: true,
+    ...(activeAiMode === 'kingheart' ? {hp: 2} : {})
   };
 
   bombs = [];
@@ -328,14 +388,14 @@ function resetGame() {
   laneHumanStillAt = 0;
   ecReset();
   warpReset();
+  kingReset();
 
   matchClock = 0;
   nextBombId = 0;
   recentPlayerMoves = [];
   message.textContent = activeAiMode === "stealth"
-    ? "対戦中：青＝人間、Stealth＝透明なCP"
-    : `対戦中：青＝人間、${activeAiMode === "warp" ? "紫" : "赤"}＝${aiDisplayName()}`;
-  if (typeof updateMatchStatus === "function") updateMatchStatus();
+    ? "対戦中：King of Spades"
+    : `対戦中：青＝人間、${activeAiMode === "jack" ? "ルビー" : activeAiMode === "queen" ? "ハート" : "赤"}＝${aiDisplayName()}`;
   draw();
 }
 
@@ -452,7 +512,7 @@ function movePlayer(dx, dy) {
     playerDirX = dx;
     playerDirY = dy;
     recentPlayerMoves.push({t:matchClock,x,y,dx,dy});
-    if (recentPlayerMoves.length > 2) recentPlayerMoves.shift();
+    if(recentPlayerMoves.length>2)recentPlayerMoves.shift();
   }
 }
 
@@ -1056,8 +1116,10 @@ function getV64CounterTrapScore(newBomb, blastCells = null, context = undefined)
   return Math.min(20,score);
 }
 
-function v14BombReject(reason) { return null; }
+let v14LastBombReject = 'unknown';
+function v14BombReject(reason) {v14LastBombReject=reason;return null;}
 function evaluateEnemyBombSpot(x, y, playerOptions = null, precomputed = null) {
+  v14LastBombReject='not_checked';
   const v14OwnBombCount=bombs.filter(b=>b.owner==='enemy').length;
   const v14Followup=v14OwnBombCount>=2; // 3発目以降のみ緩和
   const v16Pressure=precomputed?.v16Pressure || null;
@@ -1422,7 +1484,11 @@ function explode(bomb) {
     }
   }
 
-  void 0;
+  if (bomb.kingChargeBlast) {
+    void 0;
+  } else {
+    void 0;
+  }
   flames.push({
     cells,
     timer: 600,
@@ -5467,7 +5533,6 @@ function ecPredictCounterBomb(){
   if(!bombs.some(b=>b.owner==='enemy') || !bombs.some(b=>b.owner==='player'))return null;
   const closest=Math.min(...getTimedBombEvents().map(e=>e.time));
   if(closest>1750) return null;
-  // Two most recent player movements: constant memory, identical timestamps.
   const moves=recentPlayerMoves.slice().reverse();
   if(moves.length<2 || matchClock-moves[0].t>220 ||
      moves[0].t-moves[1].t>240) return null;
@@ -5763,17 +5828,23 @@ function ecThink(){
 }
 
 
-// Warp: EC1's decision policy with an independent, intentionally unfair
-// teleport ability. Teleport consumes a shared 5-second cooldown whether
-// used for attack or retreat. Other AI modes never call these functions.
-const WARP_COOLDOWN_MS=5000;
+// Jack of Diamonds: EC's decision policy with attack and emergency
+// teleportation. Both uses share Jack's 0.8-second cooldown.
+// Internal warp* identifiers remain to preserve replay event compatibility.
 const WARP_PROBE_INTERVAL_MS=480;
 let warpLastAt=-Infinity;
 let warpLastProbeAt=-Infinity;
 let warpEffect=null;
+let warpCount=0;
 function warpReset(){
-  warpLastAt=-Infinity;warpLastProbeAt=-Infinity;warpEffect=null;}
-function warpReady(){return matchClock-warpLastAt>=WARP_COOLDOWN_MS;}
+  warpLastAt=-Infinity;warpLastProbeAt=-Infinity;warpEffect=null;warpCount=0;
+}
+// Attack evaluation retains the 480ms performance throttle;
+// bomb placement and safety checks still obey normal game physics.
+function isTeleportAi(){return activeAiMode==='jack';}
+const JACK_COOLDOWN_MS=800;
+function warpCooldownMs(){return JACK_COOLDOWN_MS;}
+function warpReady(){return matchClock-warpLastAt>=warpCooldownMs();}
 function warpCellsThreatened(x,y,from,to,events){
   return isTileDangerDuring(x,y,from,to,events);
 }
@@ -5788,6 +5859,7 @@ function warpLandingAllowed(x,y,proof,events,from){
 function warpCommit(from,to,reason,details={}){
   // Snap visual animation instead of sliding across the entire board.
   warpLastAt=matchClock;
+  warpCount++;
   enemy.x=to.x;enemy.y=to.y;
   enemyVisual=createVisualPosition(enemy.x,enemy.y);
   warpEffect={from:{...from},to:{...to},remaining:410};
@@ -5858,7 +5930,7 @@ function warpAttack(){
   }
   candidates.sort((a,b)=>b.quick-a.quick);
   let best=null;
-  // At most 10 thorough tactical probes per cooldown, avoiding frame stalls.
+  // At most 10 thorough tactical probes per check, avoiding frame stalls.
   for(const site of candidates.slice(0,10)){
     const {x,y}=site;
     const value=ecAttackValue(x,y,base);
@@ -5928,10 +6000,226 @@ function warpThink(){
   ecThink();
 }
 
+// Heart-shaped bomb renderer shared by live play and the replay viewer.
+function drawQueenHeart(c, x, y) {
+  c.save();
+  c.fillStyle = '#ff3b73';
+  c.strokeStyle = '#ffe6ee';
+  c.lineWidth = 1.5;
+  c.beginPath();
+  c.moveTo(x, y+10);
+  c.bezierCurveTo(x-4,y+7,x-12,y+2,x-11,y-5);
+  c.bezierCurveTo(x-10,y-12,x-3,y-12,x,y-6);
+  c.bezierCurveTo(x+3,y-12,x+10,y-12,x+11,y-5);
+  c.bezierCurveTo(x+12,y+2,x+4,y+7,x,y+10);
+  c.closePath(); c.fill(); c.stroke();
+  c.fillStyle='#fff6fb';
+  c.beginPath();c.ellipse(x-5,y-5,2.4,1.6,-.45,0,Math.PI*2);c.fill();
+  c.restore();
+}
+
+// Convert all EC attack variations to tracking hearts without altering EC's
+// placement/escape decisions or affecting bombs owned by the human.
+function queenMarkNewBombs() {
+  for (const bomb of bombs) {
+    if (bomb.owner !== 'enemy' || bomb.heart) continue;
+    bomb.heart=true;
+    bomb.heartMoveElapsed=-QUEEN_HEART_INITIAL_DELAY_MS;
+    void 0;
+  }
+}
+
+// Shortest-path pursuit through actual empty corridors. Bombs can't pass
+// walls, other bombs, or characters; the player keeps an opportunity to dodge.
+function queenNextHeartCell(bomb) {
+  if (!player.alive || !enemy.alive) return null;
+  const size=ROWS*COLS;
+  const dist=new Int16Array(size);dist.fill(-1);
+  const q=new Int16Array(size);let head=0,tail=0;
+  const blocked=(x,y)=>x<1||x>=COLS-1||y<1||y>=ROWS-1||
+    map[y][x]!==0||bombs.some(b=>b!==bomb&&b.x===x&&b.y===y);
+  const target=player.y*COLS+player.x;
+  dist[target]=0;q[tail++]=target;
+  const dirs=[[0,-1],[0,1],[-1,0],[1,0]];
+  while(head<tail){
+    const here=q[head++],x=here%COLS,y=Math.floor(here/COLS);
+    for (const [dx,dy] of dirs) {
+      const nx=x+dx,ny=y+dy,idx=ny*COLS+nx;
+      if(blocked(nx,ny)||dist[idx]>=0)continue;
+      dist[idx]=dist[here]+1;q[tail++]=idx;
+    }
+  }
+  const current=dist[bomb.y*COLS+bomb.x];
+  if(current<=1)return null; // Do not overlap a player on the adjacent tile.
+  let best=null;
+  for (const [dx,dy] of dirs) {
+    const x=bomb.x+dx,y=bomb.y+dy;
+    if(blocked(x,y)||(x===enemy.x&&y===enemy.y)||
+       (x===player.x&&y===player.y))continue;
+    if(flames.some(f=>f.cells.some(([fx,fy])=>fx===x&&fy===y)))continue;
+    const d=dist[y*COLS+x];
+    if(d<0||d>=current)continue;
+    // Avoid moving a heart into a blast lane that includes its own Queen.
+    if(getBlastCells({...bomb,x,y}).some(([bx,by])=>bx===enemy.x&&by===enemy.y))continue;
+    if(!best||d<best.d)best={x,y,d};
+  }
+  return best;
+}
+function queenMoveHearts(dt) {
+  let moved=false;
+  for (const bomb of bombs) {
+    if(!bomb.heart||bomb.timer<=QUEEN_HEART_STOP_FUSE_MS)continue;
+    bomb.heartMoveElapsed+=dt;
+    if(bomb.heartMoveElapsed<QUEEN_HEART_STEP_MS)continue;
+    bomb.heartMoveElapsed-=QUEEN_HEART_STEP_MS;
+    const next=queenNextHeartCell(bomb);
+    if(!next)continue;
+    const from={x:bomb.x,y:bomb.y};
+    bomb.x=next.x; bomb.y=next.y; moved=true;
+    void 0;
+    void 0;
+  }
+  if(moved){ aiBlastCache=null;aiShadowRiskCache=null;v17ClearCaches(); }
+}
+
+
+// King of Heart: CP thinking is unchanged outside the active dash. A fixed
+// projectile target is sampled at launch; neither attack bends around walls.
+function kingDefeatPlayer(cause) {
+  if(!player.alive)return;
+  if(cause==='king_charge') kingSpawnChargeHitEffect(player.x,player.y);
+  if(cause==='king_orb') kingSpawnOrbHitEffect(player.x,player.y);
+  player.alive=false;
+  void 0;
+  void 0;
+}
+function kingFireOrb(){
+  if(!player.alive||!enemy.alive || kingCharge)return;
+  const sx=(enemy.x+.5)*TILE,sy=(enemy.y+.5)*TILE;
+  const tx=(player.x+.5)*TILE,ty=(player.y+.5)*TILE;
+  const len=Math.hypot(tx-sx,ty-sy);
+  kingLastOrbAt=matchClock;
+  if(len<1){kingDefeatPlayer('king_orb');return;}
+  kingOrbs.push({x:sx,y:sy,dx:(tx-sx)/len,dy:(ty-sy)/len,travel:0});
+  void 0;
+  void 0;
+}
+function kingMoveOrbs(dt){
+  if(activeAiMode!=='kingheart')return;
+  // King's energy spheres phase through all map walls and hard blocks;
+  // substeps remain for reliable collision with the player.
+  for(let i=kingOrbs.length-1;i>=0;i--){
+    const o=kingOrbs[i];let remove=false;
+    let distance=KING_ORB_SPEED_PX_PER_SEC*dt/1000;
+    while(distance>0 && !remove){
+      const step=Math.min(5,distance);distance-=step;
+      const nx=o.x+o.dx*step,ny=o.y+o.dy*step;
+      const cx=Math.floor(nx/TILE),cy=Math.floor(ny/TILE);
+      // Pass through the internal hard-block grid; only leave the board at its edge.
+      if(cx<0||cx>=COLS||cy<0||cy>=ROWS){
+        remove=true;break;
+      }
+      o.x=nx;o.y=ny;o.travel+=step;
+      if(player.alive && Math.hypot(o.x-(player.x+.5)*TILE,o.y-(player.y+.5)*TILE)<=KING_ORB_RADIUS_PX+7){
+        void 0;
+        kingDefeatPlayer('king_orb');remove=true;
+      }
+      if(o.travel>900)remove=true;
+    }
+    if(remove)kingOrbs.splice(i,1);
+  }
+}
+function kingCanChargeNow(){
+  if(activeAiMode!=='kingheart'||!player.alive||!enemy.alive||kingCharge||
+     matchClock-kingLastChargeAt<kingChargeCooldownMs())return false;
+  let dx=0,dy=0;
+  if(player.x===enemy.x && player.y!==enemy.y)dy=Math.sign(player.y-enemy.y);
+  else if(player.y===enemy.y && player.x!==enemy.x)dx=Math.sign(player.x-enemy.x);
+  else return false;
+  return map[enemy.y+dy]?.[enemy.x+dx]===0;
+}
+function kingTryStartCharge(){
+  if(!kingCanChargeNow())return false;
+  let dx=0,dy=0;
+  if(player.x===enemy.x && player.y!==enemy.y)dy=Math.sign(player.y-enemy.y);
+  else if(player.y===enemy.y && player.x!==enemy.x)dx=Math.sign(player.x-enemy.x);
+  kingCharge={dx,dy,elapsed:0};
+  kingLastChargeAt=matchClock;
+  enemyMoveTimer=ENEMY_THINK_INTERVAL;
+  void 0;
+  void 0;
+  return true;
+}
+function kingStepCharge(dt){
+  if(!kingCharge)return;
+  kingCharge.elapsed+=dt*kingMoveSpeedMultiplier();
+  while(kingCharge && kingCharge.elapsed>=KING_CHARGE_STEP_MS){
+    kingCharge.elapsed-=KING_CHARGE_STEP_MS;
+    const {dx,dy}=kingCharge;
+    const nx=enemy.x+dx,ny=enemy.y+dy;
+    if(map[ny]?.[nx]!==0){
+      // Includes the solid outer wall: stop at its neighboring traversable cell.
+      kingCharge=null;
+      kingInvulnerableUntil=matchClock+KING_CHARGE_POST_INVULN_MS;
+      enemyMoveTimer=ENEMY_THINK_INTERVAL;
+      enemyVisual=createVisualPosition(enemy.x,enemy.y);
+      void 0;
+      // Exactly the same 8-tile blast traversal, 600ms flame and bomb chain
+      // reaction as a normal enemy bomb. The 1s post-charge immunity protects King.
+      explode({x:enemy.x,y:enemy.y,range:8,owner:'enemy',id:'king-charge-blast',kingChargeBlast:true});
+      void 0;
+      break;
+    }
+    const from={x:enemy.x,y:enemy.y};
+    enemy.x=nx;enemy.y=ny;
+    enemyVisual=animateVisualPosition(enemyVisual,nx,ny,KING_CHARGE_STEP_MS);
+    // Trigger every bomb on contact; the normal while-loop resolves all
+    // newly triggered blast chains in this same update.
+    for(const bomb of bombs){
+      if(bomb.x===nx && bomb.y===ny){
+        bomb.timer=0;
+        void 0;
+      }
+    }
+    void 0;
+    if(player.alive && player.x===nx && player.y===ny){
+      void 0;
+      kingDefeatPlayer('king_charge');
+    }
+    void 0;
+  }
+}
+function drawKingOrb(c,x,y,r=KING_ORB_RADIUS_PX){
+  const glow=c.createRadialGradient(x-r*.28,y-r*.35,2,x,y,r);
+  glow.addColorStop(0,'#fff3cc');glow.addColorStop(.23,'#ff776b');
+  glow.addColorStop(.62,'#f62639');glow.addColorStop(1,'#99051b');
+  c.save();c.shadowColor='#ff253f';c.shadowBlur=12;
+  c.fillStyle=glow;c.strokeStyle='#ffd1ac';c.lineWidth=2;
+  c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fill();c.stroke();c.restore();
+}
+
 function update(dt) {
+  // Keep death and falling-crown VFX animating after the match has ended.
+  if (kingCrownFall) {
+    kingCrownFall.remaining -= dt;
+    if (kingCrownFall.remaining <= 0) kingCrownFall = null;
+  }
+  for (const effects of [kingChargeHitEffects,kingOrbHitEffects]) {
+    for (let i=effects.length-1;i>=0;i--) {
+      effects[i].remaining -= dt;
+      if(effects[i].remaining<=0) effects.splice(i,1);
+    }
+  }
   if (gameOver) return;
   matchClock += dt;
+  if (kingPhaseTwoUntil > 0 && matchClock >= kingPhaseTwoUntil) {
+    kingPhaseTwoUntil=0;
+    void 0;
+    void 0;
+  }
   if (warpEffect) warpEffect.remaining=Math.max(0,warpEffect.remaining-dt);
+  const kingWasCharging = activeAiMode==='kingheart' && kingCharge!==null;
+  if(kingWasCharging)kingStepCharge(dt);
 
   bombCooldown = Math.max(0, bombCooldown - dt);
 
@@ -5943,11 +6231,9 @@ function update(dt) {
     let dx = 0;
     let dy = 0;
 
-    const assisted = assistedStickStep();
-    if (assisted) {
-      dx = assisted.dx;
-      dy = assisted.dy;
-    } else if (heldKeys.has("arrowup") || heldKeys.has("w") || gamepadKeys.has("arrowup")) dy = -1;
+    const assisted=assistedStickStep();
+    if (assisted) { dx=assisted.dx; dy=assisted.dy; }
+    else if (heldKeys.has("arrowup") || heldKeys.has("w") || gamepadKeys.has("arrowup")) dy = -1;
     else if (heldKeys.has("arrowdown") || heldKeys.has("s") || gamepadKeys.has("arrowdown")) dy = 1;
     else if (heldKeys.has("arrowleft") || heldKeys.has("a") || gamepadKeys.has("arrowleft")) dx = -1;
     else if (heldKeys.has("arrowright") || heldKeys.has("d") || gamepadKeys.has("arrowright")) dx = 1;
@@ -5969,15 +6255,29 @@ function update(dt) {
 
   enemyBombCooldown = Math.max(0, enemyBombCooldown - dt);
 
-  // Stealth uses exactly the same laneThink() as visible CP1.
+  // A moving player can also run into the dash's occupied tile.
+  if(kingCharge && player.alive && player.x===enemy.x && player.y===enemy.y){
+    void 0;
+    kingDefeatPlayer('king_charge');
+  }
+
+  // King of Spades uses exactly the same laneThink() as visible CP.
   // Only enemy rendering changes; AI decisions and physics are identical.
-  enemyMoveTimer -= dt;
+  enemyMoveTimer -= dt * kingMoveSpeedMultiplier();
   if (enemyMoveTimer <= 0) {
     aiBlastCache = new Map();
     v17ClearCaches();
     v17TimelineCache = new Map();
-    if (activeAiMode === 'warp') warpThink();
-    else if (activeAiMode === 'ec') ecThink();
+    if(activeAiMode==='kingheart'){
+      if(!kingWasCharging && !kingCharge){
+        if(!kingTryStartCharge())laneThink();
+      }else enemyMoveTimer=ENEMY_THINK_INTERVAL;
+    }
+    else if (isTeleportAi()) warpThink();
+    else if (activeAiMode === 'ec' || activeAiMode === 'queen') {
+      ecThink();
+      if (activeAiMode === 'queen') queenMarkNewBombs();
+    }
     else laneThink();
   }
 
@@ -5988,6 +6288,11 @@ function update(dt) {
   // Resolve all chain-reaction explosions in the SAME update before hit
   // detection; otherwise a losing frame can terminate an unfinished chain.
   for (const bomb of bombs) bomb.timer -= dt;
+  if (activeAiMode === 'queen') queenMoveHearts(dt);
+  if(activeAiMode==='kingheart'){
+    if(matchClock-kingLastOrbAt>=KING_ORB_COOLDOWN_MS && !kingCharge && player.alive)kingFireOrb();
+    kingMoveOrbs(dt);
+  }
   while (true) {
     const index = bombs.findIndex(b => b.timer <= 0);
     if (index < 0) break;
@@ -6007,26 +6312,182 @@ function update(dt) {
     flame.cells.some(([x, y]) => x === player.x && y === player.y)
   );
 
-  const enemyHit = enemy.alive && flames.some(flame =>
+  const enemyHit = enemy.alive && !kingImmune() && flames.some(flame =>
     flame.cells.some(([x, y]) => x === enemy.x && y === enemy.y)
   );
 
-  if (playerHit) player.alive = false;
-  if (enemyHit) enemy.alive = false;
+  if (playerHit) {
+    const by=Array.from(new Set(flames.filter(flame=>
+      flame.cells.some(([x,y])=>x===player.x&&y===player.y))
+      .map(flame=>flame.owner||'unknown')));
+    player.alive=false;
+    void 0;
+  }
+  if (enemyHit) {
+    const by=Array.from(new Set(flames.filter(flame=>
+      flame.cells.some(([x,y])=>x===enemy.x&&y===enemy.y))
+      .map(flame=>flame.owner||'unknown')));
+    if (activeAiMode==='kingheart' && enemy.hp!==1) {
+      // The first hit ONLY breaks the crown: the 30s shield starts immediately,
+      // before any additional flame/chain reaction can decrement HP again.
+      enemy.hp=1;
+      kingPhaseTwoUntil=matchClock+KING_PHASE_TWO_MS;
+      kingFirstHitGraceUntil=matchClock+KING_FIRST_HIT_GRACE_MS;
+      void 0;
+      kingCrownFall={x:enemy.x,y:enemy.y,remaining:KING_CROWN_FALL_MS};
+      void 0;
+      void 0;
+    } else {
+      if(activeAiMode==='kingheart') enemy.hp=0;
+      enemy.alive=false;
+      void 0;
+    }
+  }
+  if (playerHit || enemyHit) void 0;
 
+  // 勝敗判定: play-only iPhone edition, no replay JSON or forced download.
   if (!player.alive && !enemy.alive) {
-    message.textContent = "引き分け！ 再戦でもう一度";
+    message.textContent = '引き分け';
     gameOver = true;
     setResultMark('draw');
   } else if (!player.alive) {
-    message.textContent = "敗北！ 再戦でもう一度";
+    message.textContent = '敗北';
     gameOver = true;
     setResultMark('lose');
   } else if (!enemy.alive) {
-    message.textContent = "勝利！ 再戦でもう一度";
+    message.textContent = '勝利';
     gameOver = true;
     setResultMark('win');
   }
+}
+
+function drawKingChargeHitEffect(ctx,fx){
+  const progress=1-Math.max(0,fx.remaining)/KING_CHARGE_HIT_FX_MS;
+  const alpha=Math.max(0,fx.remaining/KING_CHARGE_HIT_FX_MS);
+  const cx=fx.x*TILE+TILE/2, cy=fx.y*TILE+TILE/2;
+  ctx.save();
+  ctx.globalAlpha=Math.min(1,0.95*alpha+0.05);
+  ctx.fillStyle='rgba(255,70,70,0.34)';
+  ctx.beginPath();
+  ctx.arc(cx,cy,TILE*(0.55+progress*0.75),0,Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle='rgba(255,225,160,'+(0.85*alpha)+')';
+  ctx.lineWidth=3;
+  ctx.beginPath();
+  ctx.arc(cx,cy,TILE*(0.25+progress*0.85),0,Math.PI*2);
+  ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,'+(0.95*alpha)+')';
+  ctx.lineWidth=2.4;
+  for(let i=0;i<8;i++){
+    const ang=progress*1.8+i*Math.PI/4;
+    const r1=TILE*(0.18+progress*0.15), r2=TILE*(0.52+progress*0.48);
+    ctx.beginPath();
+    ctx.moveTo(cx+Math.cos(ang)*r1, cy+Math.sin(ang)*r1);
+    ctx.lineTo(cx+Math.cos(ang)*r2, cy+Math.sin(ang)*r2);
+    ctx.stroke();
+  }
+  ctx.fillStyle='rgba(255,245,200,'+(0.95*alpha)+')';
+  ctx.beginPath();
+  ctx.arc(cx,cy,TILE*(0.12+progress*0.18),0,Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawKingOrbHitEffect(ctx,fx){
+  const left=Math.max(0,fx.remaining/KING_ORB_HIT_FX_MS);
+  const elapsed=1-left;
+  const cx=fx.x*TILE+TILE/2,cy=fx.y*TILE+TILE/2;
+  ctx.save();
+  ctx.globalAlpha=Math.min(1,left*3);
+  // Orb-size (64px) Japanese onomatopoeia, not a second damage hitbox.
+  const scale=.88+Math.min(.17,elapsed*.9);
+  ctx.translate(cx,cy);
+  ctx.scale(scale,scale);
+  ctx.font='900 60px "Yu Gothic","Meiryo",sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.lineJoin='round';ctx.lineWidth=5;
+  ctx.shadowColor='#ff263b';ctx.shadowBlur=16;
+  ctx.strokeStyle='#900018';ctx.strokeText('驚',0,1,64);
+  ctx.fillStyle='#fff5b7';ctx.fillText('驚',0,1,64);
+  ctx.restore();
+}
+
+function drawKingPhaseTwoAura(ctx,eVisual){
+  if(!kingPhaseTwoActive())return;
+  const cx=eVisual.x*TILE+TILE/2,cy=eVisual.y*TILE+TILE/2;
+  const t=matchClock/1000;
+  const pulse=0.5+0.5*Math.sin(t*9);
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  const outer=ctx.createRadialGradient(cx,cy,TILE*.28,cx,cy,TILE*(1.06+.07*pulse));
+  outer.addColorStop(0,'rgba(255,45,65,0)');
+  outer.addColorStop(.52,`rgba(255,42,90,${.1+.08*pulse})`);
+  outer.addColorStop(.79,`rgba(237,64,255,${.22+.1*pulse})`);
+  outer.addColorStop(1,'rgba(255,35,90,0)');
+  ctx.fillStyle=outer;
+  ctx.beginPath();ctx.arc(cx,cy,TILE*(1.08+.07*pulse),0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle=`rgba(255,224,88,${.78+.2*pulse})`;
+  ctx.lineWidth=3;
+  ctx.beginPath();ctx.arc(cx,cy,TILE*(.47+.07*pulse),0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle=`rgba(252,82,255,${.72+.2*pulse})`;
+  ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.arc(cx,cy,TILE*(.72+.1*pulse),0,Math.PI*2);ctx.stroke();
+  for(let i=0;i<6;i++){
+    const a=t*3.8+i*Math.PI/3;
+    const r=TILE*(.75+.12*Math.sin(t*6+i));
+    const x=cx+Math.cos(a)*r,y=cy+Math.sin(a)*r;
+    ctx.fillStyle=i%2?'#ff80c5':'#ffe777';
+    ctx.beginPath();ctx.arc(x,y,2.5+1.1*pulse,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawKingChargeReadyAura(ctx, eVisual){
+  if(kingPhaseTwoActive() || !kingCanChargeNow()) return;
+  const cx=eVisual.x*TILE+TILE/2, cy=eVisual.y*TILE+TILE/2;
+  const pulse=(Math.sin(matchClock/120)+1)/2;
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  ctx.strokeStyle=`rgba(255, 70, 70, ${0.55+0.2*pulse})`;
+  ctx.lineWidth=3.2;
+  ctx.beginPath();
+  ctx.arc(cx,cy,TILE*(0.48+0.06*pulse),0,Math.PI*2);
+  ctx.stroke();
+  ctx.strokeStyle=`rgba(255, 180, 200, ${0.32+0.18*pulse})`;
+  ctx.lineWidth=2.2;
+  ctx.beginPath();
+  ctx.arc(cx,cy,TILE*(0.63+0.08*pulse),0,Math.PI*2);
+  ctx.stroke();
+  for(let i=0;i<4;i++){
+    const ang=matchClock/220+i*Math.PI/2;
+    const r1=TILE*(0.54+0.03*pulse), r2=TILE*(0.82+0.08*pulse);
+    ctx.strokeStyle=`rgba(255, 120, 140, ${0.5+0.22*pulse})`;
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(cx+Math.cos(ang)*r1, cy+Math.sin(ang)*r1);
+    ctx.lineTo(cx+Math.cos(ang)*r2, cy+Math.sin(ang)*r2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawKingFallingCrown(c, crown) {
+  if(!crown) return;
+  const t=Math.min(1,Math.max(0,1-crown.remaining/KING_CROWN_FALL_MS));
+  const x=(crown.x+0.5)*TILE+24*t;
+  const y=(crown.y+0.5)*TILE-19-13*Math.sin(Math.PI*t)+23*t*t;
+  c.save();
+  c.globalAlpha=t>0.65?Math.max(0,(1-t)/0.35):1;
+  c.translate(x,y);
+  c.rotate(t*1.3);
+  c.fillStyle='#facc15';
+  c.strokeStyle='#fff3a4';
+  c.lineWidth=1.25;
+  c.beginPath();
+  c.moveTo(-9,0);c.lineTo(-9,-8);c.lineTo(-3,-4);c.lineTo(0,-10);
+  c.lineTo(3,-4);c.lineTo(9,-8);c.lineTo(9,0);c.closePath();
+  c.fill();c.stroke();
+  c.restore();
 }
 
 function draw() {
@@ -6053,6 +6514,7 @@ function draw() {
 
   // 爆弾
   for (const bomb of bombs) {
+    if (bomb.heart) { drawQueenHeart(ctx, bomb.x*TILE+TILE/2, bomb.y*TILE+TILE/2); continue; }
     ctx.fillStyle = "#111827";
     ctx.beginPath();
     ctx.arc(
@@ -6079,15 +6541,18 @@ function draw() {
     }
   }
 
-  // Warpの瞬間移動は短い紫の残像で示す。ヒット判定には影響しない。
-  if (activeAiMode === 'warp' && warpEffect && warpEffect.remaining > 0) {
+  // Jackの瞬間移動は短いルビー色の残像で示す。ヒット判定には影響しない。
+  if (isTeleportAi() && warpEffect && warpEffect.remaining > 0) {
     const alpha=Math.min(1,warpEffect.remaining/370);
     for (const [p,radius] of [[warpEffect.from,0.35],[warpEffect.to,0.45]]) {
-      ctx.strokeStyle=`rgba(190,115,255,${alpha*0.92})`;
+      ctx.strokeStyle=`rgba(255,110,155,${alpha*0.92})`;
       ctx.lineWidth=3;
       ctx.beginPath();ctx.arc(p.x*TILE+TILE/2,p.y*TILE+TILE/2,TILE*radius,0,Math.PI*2);ctx.stroke();
     }
   }
+
+  // King of Heart's red, four-tile-area spheres (drawn behind characters).
+  if(activeAiMode==='kingheart')for(const orb of kingOrbs)drawKingOrb(ctx,orb.x,orb.y);
 
   // プレイヤー：青
   if (player.alive) {
@@ -6107,10 +6572,21 @@ function draw() {
     ctx.fillRect(pVisual.x * TILE + 19, pVisual.y * TILE + 9, 4, 4);
   }
 
-  // CP1/EC1は赤、Warpだけ紫。Stealthではキャラクターを描画しない。
+  if(activeAiMode==='kingheart') {
+    for (const fx of kingChargeHitEffects) drawKingChargeHitEffect(ctx, fx);
+    for (const fx of kingOrbHitEffects) drawKingOrbHitEffect(ctx, fx);
+  }
+
+  // CP/ECは赤、Jackはルビー色、Queenはハート色。King of Spadesは描画しない。
   // 爆弾・爆風の表示は従来どおり。
+  if (enemy.alive && activeAiMode==='kingheart') {
+    drawKingPhaseTwoAura(ctx,eVisual);
+    drawKingChargeReadyAura(ctx,eVisual);
+  }
   if (enemy.alive && activeAiMode !== "stealth") {
-    ctx.fillStyle = activeAiMode === 'warp' ? "#a855f7" : "#f87171";
+    ctx.fillStyle = activeAiMode === 'jack' ? "#fb3f7f"
+      : activeAiMode === 'queen' ? "#ff477e"
+      : activeAiMode === 'kingheart' ? '#b91c1c' : "#f87171";
     ctx.beginPath();
     ctx.arc(
       eVisual.x * TILE + TILE / 2,
@@ -6123,8 +6599,37 @@ function draw() {
 
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(eVisual.x * TILE + 9, eVisual.y * TILE + 9, 4, 4);
-    ctx.fillRect(eVisual.x * TILE + 19, eVisual.y * TILE + 9, 4, 4);
+    if (activeAiMode === 'jack') {
+      // Jack of Diamonds: scarred eye, manga-style メ-shaped slash over the right eye.
+      const eyeX=eVisual.x*TILE,eyeY=eVisual.y*TILE;
+      ctx.strokeStyle="#ffe4ef";
+      ctx.lineWidth=1.7;
+      ctx.lineCap="round";
+      ctx.beginPath();
+      ctx.moveTo(eyeX+17.8, eyeY+9.6);
+      ctx.lineTo(eyeX+23.8, eyeY+14.6);
+      ctx.moveTo(eyeX+23.6, eyeY+9.7);
+      ctx.lineTo(eyeX+17.6, eyeY+14.7);
+      ctx.stroke();
+    } else {
+      ctx.fillRect(eVisual.x * TILE + 19, eVisual.y * TILE + 9, 4, 4);
+    }
+    if(activeAiMode==='kingheart'){
+      const ex=eVisual.x*TILE+TILE/2,ey=eVisual.y*TILE+TILE/2;
+      if(enemy.hp>1){
+        ctx.fillStyle='#facc15';
+        ctx.beginPath();ctx.moveTo(ex-9,ey-9);ctx.lineTo(ex-9,ey-17);
+        ctx.lineTo(ex-3,ey-13);ctx.lineTo(ex,ey-19);
+        ctx.lineTo(ex+3,ey-13);ctx.lineTo(ex+9,ey-17);
+        ctx.lineTo(ex+9,ey-9);ctx.closePath();ctx.fill();
+      }
+      if(kingImmune()){
+        ctx.strokeStyle=kingCharge?'#fff1a4':'#ffe08c';ctx.lineWidth=kingCharge?3:2;
+        ctx.beginPath();ctx.arc(ex,ey,TILE*.46,0,Math.PI*2);ctx.stroke();
+      }
+    }
   }
+  if(activeAiMode==='kingheart' && kingCrownFall) drawKingFallingCrown(ctx,kingCrownFall);
 }
 
 function loop(now) {
@@ -6171,23 +6676,22 @@ window.addEventListener("blur", () => {
 
 
 // The strategy selector switches only the opponent decision loop.
-// Both strategies share the same map, bomb logic, input and game rules.
+// Both strategies share the same map, bomb logic, input and replay system.
 function setupOpponentSelector() {
-  const select = document.getElementById('ai-opponent-select');
-  if (!select) return;
-  select.value = activeAiMode;
-  select.addEventListener('change', () => {
-    const chosen = ['lane','ec','stealth','warp'].includes(select.value) ? select.value : 'lane';
-    if (chosen === activeAiMode) return;
-    activeAiMode = chosen;
-    AI_BUILD_VERSION = chosen === 'ec' ? EC_BUILD_VERSION
-      : chosen === 'stealth' ? STEALTH_BUILD_VERSION
-      : chosen === 'warp' ? WARP_BUILD_VERSION : LANE_BUILD_VERSION;
-    heldKeys.clear();
-    gamepadKeys.clear();
-    if (typeof releaseStick === 'function') releaseStick();
-    const legend = document.getElementById('opponent-legend');
-    if (legend) legend.textContent = (chosen === 'stealth' ? '透明：' : chosen === 'warp' ? '紫：' : '赤：') + aiDisplayName();
+  const select=document.getElementById('ai-opponent-select');
+  if(!select)return;
+  select.value=activeAiMode;
+  select.addEventListener('change',()=>{
+    const chosen=['lane','ec','queen','stealth','jack','kingheart'].includes(select.value)?select.value:'lane';
+    if(chosen===activeAiMode)return;
+    activeAiMode=chosen;
+    AI_BUILD_VERSION=chosen==='ec'?EC_BUILD_VERSION
+      :chosen==='queen'?QUEEN_BUILD_VERSION
+      :chosen==='stealth'?STEALTH_BUILD_VERSION
+      :chosen==='jack'?JACK_BUILD_VERSION
+      :chosen==='kingheart'?KING_HEART_BUILD_VERSION:LANE_BUILD_VERSION;
+    heldKeys.clear();gamepadKeys.clear();
+    if(typeof releaseStick==='function')releaseStick();
     showOkibonBuildVersion();
     resetGame();
   });
@@ -6198,6 +6702,7 @@ setupOpponentSelector();
 
 resetGame();
 requestAnimationFrame(loop);
+
 
 </script>
 <script>
