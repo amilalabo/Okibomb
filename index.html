@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="置きボン AI Lab">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0d1320">
 <title>v18-LG5</title>
@@ -13,8 +15,8 @@
 * { box-sizing:border-box; }
 html { min-height:100%; overscroll-behavior:none; }
 body { margin:0; min-height:100dvh; padding: max(9px,env(safe-area-inset-top)) max(9px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(9px,env(safe-area-inset-left)); -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
-body, button, .joystick, .bomb-button, canvas { -webkit-tap-highlight-color:transparent; }
-button, .joystick, .bomb-button, .board { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+body, button, .dpad, .bomb-button, canvas { -webkit-tap-highlight-color:transparent; }
+button, .dpad, .bomb-button, .board { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
 main { max-width:510px; margin:0 auto; }
 .brand { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:1px 4px 9px; }
 .brand .name { font-size:20px; font-weight:850; letter-spacing:.01em; }
@@ -40,39 +42,42 @@ main { max-width:510px; margin:0 auto; }
 #result-mark[data-result="draw"] { color:#ffe4a3; }
 /* Keep the internal status node for game logic; do not show selectable text above the touch controls. */
 #message { display:none !important; }
-/* 入力エリアは常に固定位置。指を置いた後、中心からの相対方向で移動する。 */
-.controls { display:flex; align-items:center; justify-content:space-between; gap:30px; min-height:160px; padding:8px 8px 7px; touch-action:pan-x pan-y; }
-.joystick { flex:none; width:140px; height:140px; border-radius:50%; border:2px solid #4f6c88;
- background:radial-gradient(circle at 50% 50%,#263e55 0%,#17293b 72%); position:relative; touch-action:none; cursor:pointer; }
-.joystick::before, .joystick::after { content:""; position:absolute; background:#6c8aa4; opacity:.45; border-radius:2px; pointer-events:none; }
-.joystick::before { left:calc(50% - 1px); top:15px; bottom:15px; width:2px; }
-.joystick::after { top:calc(50% - 1px); left:15px; right:15px; height:2px; }
-.stick-thumb { position:absolute; z-index:2; left:50%; top:50%; width:58px; height:58px; margin:-29px 0 0 -29px;
- border-radius:50%; border:2px solid #a7c5e4; background:linear-gradient(145deg,#527aa3,#2d526f);
- box-shadow:0 5px 10px #0715229c; transform:translate(0,0); pointer-events:none; transition:transform 40ms linear; }
-.stick-thumb::before { content:""; position:absolute; inset:17px; border-radius:50%; background:#accde7; opacity:.6; }
+/* Fixed D-pad: discrete four-way keys, continuous movement while pressed. */
+.controls { display:flex; align-items:center; justify-content:space-between; gap:30px; min-height:166px; padding:7px 8px; touch-action:none; }
+.dpad { flex:none; width:150px; height:150px; display:grid; grid-template:repeat(3,1fr)/repeat(3,1fr); gap:3px; touch-action:none; -webkit-user-select:none; user-select:none; }
+.dpad .dpad-key { display:grid; place-items:center; min-width:0; min-height:0; width:100%; height:100%; padding:0; border:2px solid #8badcf; border-radius:11px;
+  font-size:22px; font-weight:950; color:#e1f4ff; background:linear-gradient(155deg,#426e94,#193851); box-shadow:0 4px 0 #091826; touch-action:none; cursor:pointer; }
+.dpad .dpad-key.pressed { background:linear-gradient(155deg,#79b0df,#2c648e); transform:translateY(3px); box-shadow:0 1px 0 #091826; border-color:#c5e8ff; }
+.dpad-up { grid-area:1/2; }
+.dpad-left { grid-area:2/1; }
+.dpad-right { grid-area:2/3; }
+.dpad-down { grid-area:3/2; }
+.dpad-center { grid-area:2/2; align-self:center; justify-self:center; width:76%; height:76%; border-radius:50%; border:2px solid #5c83a4; background:#203d57; box-shadow:inset 0 0 9px #0b2033; pointer-events:none; }
 .bomb-button { flex:none; width:96px; height:96px; border-radius:50%; border:3px solid #ffb3a3;
  background:radial-gradient(circle at 32% 25%,#ff8c78,#c9344e 80%); color:white; font-size:17px; font-weight:850;
  text-shadow:0 1px 3px #661625; box-shadow:0 7px 0 #762137, 0 10px 20px #040a15ad;
  touch-action:none; cursor:pointer; }
 .bomb-button:active, .bomb-button.pressed { transform:translateY(4px); box-shadow:0 3px 0 #762137; }
 .settings { border:1px solid #283b50; background:#151f30; border-radius:12px; margin:28px 0 10px; padding:13px; }
-.actions { display:flex; justify-content:flex-end; align-items:center; }
+.actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; }
+#fullscreen-help[hidden] { display:none; }
+#fullscreen-help { color:#cfe1f1; font-size:12px; line-height:1.6; margin:9px 0 0; }
+#fullscreen { min-width:88px; }
 #restart { min-width:140px; min-height:43px; }
 button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; background:#28527b; color:#fff;
  border:1px solid #507fac; border-radius:9px; padding:10px 8px; min-height:42px; text-decoration:none; text-align:center; }
-@media (max-width:365px) { .joystick{width:124px;height:124px} .controls{min-height:142px;gap:24px} .bomb-button{width:84px;height:84px;font-size:15px}
+@media (max-width:365px) { .dpad{width:129px;height:129px;gap:2px} .dpad .dpad-key{font-size:18px;border-radius:8px} .controls{min-height:145px;gap:24px} .bomb-button{width:84px;height:84px;font-size:15px}
   .brand .name{font-size:18px} .brand .ai-mode-picker{gap:5px} .brand .ai-mode-picker select{width:110px} }
 @media (orientation:landscape) and (max-height:530px) {
   main { max-width:none; width:100%; }
   .brand { padding:0 2px 4px; }
   .brand .name { font-size:15px; }
-  .landscape-layout { display:grid; grid-template-columns:minmax(0,calc((100dvh - 46px)*15/13)) minmax(230px,1fr); gap:16px; justify-content:center; align-items:start; }
-  .game-column { max-width:calc((100dvh - 46px)*15/13); }
+  .landscape-layout { display:grid; grid-template-columns:minmax(0,calc((100dvh - 70px)*15/13)) minmax(230px,1fr); gap:16px; justify-content:center; align-items:start; }
+  .game-column { max-width:calc((100dvh - 70px)*15/13); }
   .controls-column { min-width:0; }
   .controls { padding:3px 0; min-height:120px; gap:16px; justify-content:space-around; }
-  .joystick { width:112px; height:112px; }
-  .stick-thumb { width:48px;height:48px;margin:-24px 0 0 -24px; }
+  .dpad { width:123px; height:123px; gap:2px; }
+  .dpad .dpad-key { font-size:18px; border-radius:8px; }
   .bomb-button { width:78px;height:78px; font-size:15px; }
   .settings { margin-top:10px; }
 }
@@ -99,15 +104,21 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
         </div>
     <div class="controls-column">
       <div class="controls" aria-label="タッチ操作">
-        <div id="joystick" class="joystick" role="application" aria-label="固定バーチャルスティック・押し続けて移動">
-          <div id="stick-thumb" class="stick-thumb"></div>
+        <div id="dpad" class="dpad" role="group" aria-label="十字キー・押し続けて移動">
+          <button type="button" class="dpad-key dpad-up" data-direction="arrowup" aria-label="上へ移動">▲</button>
+          <button type="button" class="dpad-key dpad-left" data-direction="arrowleft" aria-label="左へ移動">◀</button>
+          <span class="dpad-center" aria-hidden="true"></span>
+          <button type="button" class="dpad-key dpad-right" data-direction="arrowright" aria-label="右へ移動">▶</button>
+          <button type="button" class="dpad-key dpad-down" data-direction="arrowdown" aria-label="下へ移動">▼</button>
         </div>
         <button type="button" id="bomb-button" class="bomb-button" aria-label="爆弾を設置">BOMB</button>
       </div>
       <section class="settings">
         <div class="actions">
+          <button id="fullscreen" type="button">全画面</button>
           <button id="restart" type="button">再戦</button>
         </div>
+        <p id="fullscreen-help" hidden role="status">iPhoneのSafariでは、共有メニュー →「ホーム画面に追加」→「Webアプリとして開く」を有効にして追加し、ホーム画面のアイコンから起動するとアドレスバーなしで遊べます。</p>
       </section>
     </div>
   </div>
@@ -6706,132 +6717,114 @@ requestAnimationFrame(loop);
 
 </script>
 <script>
-// Standalone mobile touch controls; only gameplay input is forwarded.
-// Keep the joystick anchored (not floating), and only send existing player inputs.
+// Four-way mobile D-pad. Hold to walk continuously at the original game cadence.
 (() => {
   'use strict';
-  const stick = document.getElementById('joystick');
-  const thumb = document.getElementById('stick-thumb');
+  const pad = document.getElementById('dpad');
   const bomb = document.getElementById('bomb-button');
-  const directions = ['arrowup','arrowdown','arrowleft','arrowright'];
-  let stickPointer = null;
+  const fullscreenButton = document.getElementById('fullscreen');
+  const fullscreenHelp = document.getElementById('fullscreen-help');
+  const directionKeys = ['arrowup','arrowdown','arrowleft','arrowright'];
+  let padPointer = null;
   let bombPointer = null;
   let currentDirection = '';
 
   function setDirection(next) {
-    if (currentDirection === next) return;
-    for (const direction of directions) heldKeys.delete(direction);
-    if (next) heldKeys.add(next);
-    currentDirection = next;
-    // Directly reuse the game's existing 120ms movement cadence.
+    if(currentDirection === next)return;
+    for(const key of directionKeys)heldKeys.delete(key);
+    currentDirection=next;
+    if(next)heldKeys.add(next);
+    for(const key of pad.querySelectorAll('.dpad-key'))
+      key.classList.toggle('pressed',key.dataset.direction===next);
+    // The game itself remains responsible for the original 120ms movement cadence.
   }
-
-  function moveThumb(event) {
-    const rect = stick.getBoundingClientRect();
-    const centerX = rect.left + rect.width/2;
-    const centerY = rect.top + rect.height/2;
-    const dx = event.clientX - centerX;
-    const dy = event.clientY - centerY;
-    const distance = Math.hypot(dx,dy);
-    const maxTravel = Math.min(rect.width,rect.height)*0.28;
-    const factor = distance > maxTravel ? maxTravel/distance : 1;
-    thumb.style.transform = `translate(${Math.round(dx*factor)}px,${Math.round(dy*factor)}px)`;
-    const deadZone = Math.min(rect.width,rect.height)*0.065;
-    if (distance < deadZone) {
-      touchStickAxes = null;
-      touchTurnLock = null;
-      touchTurnLockReference = null;
-      setDirection('');
-    } else {
-      const nextAxes = {x:dx/distance,y:dy/distance};
-      if (touchTurnLock && touchTurnLockReference) {
-        const lockedComponent = touchTurnLock === 'x' ? nextAxes.x : nextAxes.y;
-        const originalComponent = touchTurnLock === 'x'
-          ? touchTurnLockReference.x : touchTurnLockReference.y;
-        const otherComponent = touchTurnLock === 'x' ? nextAxes.y : nextAxes.x;
-        const originalOther = touchTurnLock === 'x'
-          ? touchTurnLockReference.y : touchTurnLockReference.x;
-        // Keep the turn while the player leans MORE toward the new lane.
-        // Release when they deliberately lean back toward the original lane,
-        // reverse the locked axis, or switch the other axis strongly.
-        if (lockedComponent * originalComponent <= 0 ||
-            Math.abs(lockedComponent) < Math.abs(originalComponent) * 0.72 ||
-            (otherComponent * originalOther < 0 && Math.abs(otherComponent) > 0.43)) {
-          touchTurnLock = null;
-          touchTurnLockReference = null;
-        }
-      }
-      touchStickAxes = nextAxes;
-      // Keep the old cardinal key as fallback metadata only; the main loop
-      // now uses both stick axes to correct corridors and intersections.
-      if (Math.abs(dx) > Math.abs(dy)) setDirection(dx>0?'arrowright':'arrowleft');
-      else setDirection(dy>0?'arrowdown':'arrowup');
-    }
-  }
-
-  function releaseStick() {
-    stickPointer = null;
-    touchStickAxes = null;
-    touchTurnLock = null;
-    touchTurnLockReference = null;
+  function releasePad() {
+    padPointer=null;
+    touchStickAxes=null;touchTurnLock=null;touchTurnLockReference=null;
     setDirection('');
-    thumb.style.transform = 'translate(0px,0px)';
   }
-  // The selector already supports calling releaseStick() where available.
-  // Expose only the release hook; keep gameplay strategy in game.js.
-  window.releaseStick = releaseStick;
-
-  stick.addEventListener('pointerdown', event => {
-    if (stickPointer !== null) return;
-    event.preventDefault();
-    stickPointer = event.pointerId;
-    try { stick.setPointerCapture(event.pointerId); } catch (_) {}
-    moveThumb(event);
-  });
-  stick.addEventListener('pointermove', event => {
-    if (stickPointer !== event.pointerId) return;
-    event.preventDefault();
-    moveThumb(event);
-  });
-  function endStick(event) {
-    if (stickPointer !== event.pointerId) return;
-    releaseStick();
+  // Opponent switching and restarting can release active touch movement.
+  window.releaseStick=releasePad;
+  function directionAt(x,y) {
+    const el=document.elementFromPoint(x,y);
+    const key=el && el.closest ? el.closest('.dpad-key') : null;
+    return key && pad.contains(key) ? key.dataset.direction : '';
   }
-  stick.addEventListener('pointerup',endStick);
-  stick.addEventListener('pointercancel',endStick);
-  stick.addEventListener('lostpointercapture',endStick);
+  pad.addEventListener('pointerdown', event => {
+    if(padPointer!==null)return;
+    const key=event.target.closest('.dpad-key');
+    if(!key)return;
+    event.preventDefault();
+    padPointer=event.pointerId;
+    try{pad.setPointerCapture(event.pointerId);}catch(_){}
+    setDirection(key.dataset.direction);
+  });
+  pad.addEventListener('pointermove', event => {
+    if(padPointer!==event.pointerId)return;
+    event.preventDefault();
+    const next=directionAt(event.clientX,event.clientY);
+    // Sliding between directions works; leaving the pad releases movement.
+    setDirection(next);
+  });
+  function endPad(event){if(padPointer===event.pointerId)releasePad();}
+  pad.addEventListener('pointerup',endPad);
+  pad.addEventListener('pointercancel',endPad);
+  pad.addEventListener('lostpointercapture',endPad);
+  pad.addEventListener('click',event => event.preventDefault());
 
   bomb.addEventListener('pointerdown', event => {
-    if (bombPointer !== null) return;
+    if(bombPointer!==null)return;
     event.preventDefault();
-    bombPointer = event.pointerId;
+    bombPointer=event.pointerId;
     bomb.classList.add('pressed');
-    try { bomb.setPointerCapture(event.pointerId); } catch (_) {}
+    try{bomb.setPointerCapture(event.pointerId);}catch(_){}
     requestBomb();
   });
   function releaseBomb(event) {
-    if (bombPointer !== event.pointerId) return;
-    bombPointer = null;
+    if(bombPointer!==event.pointerId)return;
+    bombPointer=null;
     bomb.classList.remove('pressed');
   }
   bomb.addEventListener('pointerup',releaseBomb);
   bomb.addEventListener('pointercancel',releaseBomb);
   bomb.addEventListener('lostpointercapture',releaseBomb);
-  // Suppress synthetic clicks after the pointer event, avoiding duplicate bombs.
   bomb.addEventListener('click',event => event.preventDefault());
 
-  const releaseInputs = () => {
-    releaseStick();
-    bombPointer = null;
+  // Safari on iPhone does not permit arbitrary pages to hide browser chrome;
+  // launching from an iOS Home Screen web-app icon uses standalone display mode.
+  const standalone=()=>window.navigator.standalone===true ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  if(standalone())fullscreenButton.hidden=true;
+  function refreshFullscreenText(){
+    fullscreenButton.textContent=document.fullscreenElement?'全画面解除':'全画面';
+  }
+  document.addEventListener('fullscreenchange',refreshFullscreenText);
+  fullscreenButton.addEventListener('click',async()=>{
+    if(document.fullscreenElement){
+      try{await document.exitFullscreen();}catch(_){ }
+      return;
+    }
+    const root=document.documentElement;
+    if(typeof root.requestFullscreen==='function'){
+      try{
+        await root.requestFullscreen({navigationUI:'hide'});
+        fullscreenHelp.hidden=true;
+        return;
+      }catch(_){ /* iPhone browsers may reject the request. */ }
+    }
+    fullscreenHelp.hidden=false;
+  });
+  function releaseAll() {
+    releasePad();
+    bombPointer=null;
     bomb.classList.remove('pressed');
-  };
-  window.addEventListener('blur',releaseInputs);
-  document.addEventListener('visibilitychange',() => { if(document.hidden) releaseInputs(); });
-  document.addEventListener('contextmenu', event => {
-    if(event.target.closest('.controls')) event.preventDefault();
+  }
+  window.addEventListener('blur',releaseAll);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAll();});
+  document.addEventListener('contextmenu',event=>{
+    if(event.target.closest('.controls'))event.preventDefault();
   });
 })();
-
 </script>
 
 
