@@ -76,6 +76,8 @@ main { max-width:510px; margin:0 auto; }
 #fullscreen-help { color:#cfe1f1; font-size:12px; line-height:1.6; margin:9px 0 0; }
 #fullscreen { min-width:88px; }
 #restart { min-width:140px; min-height:43px; }
+#gamepad-status[hidden] { display:none !important; }
+#gamepad-status { margin:10px 1px 0; color:#a9e6ba; font-size:12px; line-height:1.3; font-weight:700; }
 button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; background:#28527b; color:#fff;
  border:1px solid #507fac; border-radius:9px; padding:10px 8px; min-height:42px; text-decoration:none; text-align:center; }
 @media (max-width:365px) { .dpad{width:129px;height:129px;gap:2px} .dpad .dpad-key{font-size:18px;border-radius:8px} .controls{min-height:145px;gap:24px} .bomb-button{width:84px;height:84px;font-size:15px}
@@ -130,6 +132,7 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
           <button id="fullscreen" type="button">全画面</button>
           <button id="restart" type="button">再戦</button>
         </div>
+        <p id="gamepad-status" role="status" hidden>🎮 コントローラー接続中</p>
         <p id="fullscreen-help" hidden role="status">iPhoneのSafariでは、共有メニュー →「ホーム画面に追加」→「Webアプリとして開く」を有効にして追加し、ホーム画面のアイコンから起動するとアドレスバーなしで遊べます。</p>
       </section>
     </div>
@@ -212,6 +215,21 @@ const V18_EDGE_RELAY_LATE_MS = 400;
 
 const gamepadKeys = new Set();
 let gamepadBombWasPressed = false;
+const gamepadStatus = document.getElementById('gamepad-status');
+let gamepadIsConnected = false;
+function markGamepadConnection(connected){
+  if(connected === gamepadIsConnected)return;
+  gamepadIsConnected = connected;
+  if(gamepadStatus)gamepadStatus.hidden = !connected;
+  if(!connected){gamepadKeys.clear();gamepadBombWasPressed=false;}
+}
+// iOS Safari exposes paired Bluetooth pads after a physical button/axis input.
+window.addEventListener('gamepadconnected',()=>markGamepadConnection(true));
+window.addEventListener('gamepaddisconnected',()=>{
+  let connected=false;
+  try{connected=!!Array.from(navigator.getGamepads?.()||[]).find(p=>p?.connected);}catch(_){}
+  markGamepadConnection(connected);
+});
 
 const TILE = 32;
 const COLS = 15;
@@ -541,55 +559,49 @@ function movePlayer(dx, dy) {
 
 function updateGamepad() {
   gamepadKeys.clear();
-
-  if (!navigator.getGamepads) return;
-
-  const gamepads = navigator.getGamepads();
-  let pad = null;
-
-  for (const gamepad of gamepads) {
-    if (gamepad && gamepad.connected) {
-      pad = gamepad;
-      break;
-    }
-  }
-
-  // コントローラーが接続されていない
-  if (!pad) {
-    gamepadBombWasPressed = false;
+  if (typeof navigator.getGamepads !== 'function'){
+    markGamepadConnection(false);
     return;
   }
 
-  // 十字キー
-  const up = pad.buttons[12]?.pressed;
-  const down = pad.buttons[13]?.pressed;
-  const left = pad.buttons[14]?.pressed;
-  const right = pad.buttons[15]?.pressed;
-
-  // 左スティック
-  const axisX = pad.axes[0] || 0;
-  const axisY = pad.axes[1] || 0;
-  const deadzone = 0.5;
-
-  if (up || axisY < -deadzone) {
-    gamepadKeys.add("arrowup");
-  } else if (down || axisY > deadzone) {
-    gamepadKeys.add("arrowdown");
-  } else if (left || axisX < -deadzone) {
-    gamepadKeys.add("arrowleft");
-  } else if (right || axisX > deadzone) {
-    gamepadKeys.add("arrowright");
+  // Use the first connected controller; Safari can expose holes in this list.
+  let pad=null;
+  try {
+    for(const candidate of navigator.getGamepads()||[]){
+      if(candidate && candidate.connected){pad=candidate;break;}
+    }
+  } catch (_) {
+    markGamepadConnection(false);
+    return;
   }
+  markGamepadConnection(!!pad);
+  if(!pad)return;
 
-  // Bボタン／○ボタン（標準配置ではボタン番号1）
-  const bombPressed = pad.buttons[1]?.pressed ?? false;
-
-  // 押した瞬間だけ爆弾を設置
-  if (bombPressed && !gamepadBombWasPressed) {
-    requestBomb();
+  // Standard Gamepad mapping: D-pad 12–15 and left stick axes 0–1.
+  const pressed=(index)=>{
+    const b=pad.buttons?.[index];
+    return b===true || !!(b && (b.pressed===true || b.value>0.5));
+  };
+  const up=pressed(12), down=pressed(13), left=pressed(14), right=pressed(15);
+  const axisX=Number(pad.axes?.[0]||0), axisY=Number(pad.axes?.[1]||0);
+  const deadzone=0.40;
+  let direction='';
+  if(up) direction='arrowup';
+  else if(down) direction='arrowdown';
+  else if(left) direction='arrowleft';
+  else if(right) direction='arrowright';
+  else if(Math.abs(axisX)>deadzone || Math.abs(axisY)>deadzone){
+    // On diagonal stick input, follow the stronger axis instead of getting stuck vertically.
+    direction=Math.abs(axisX)>Math.abs(axisY)
+      ? (axisX<0?'arrowleft':'arrowright')
+      : (axisY<0?'arrowup':'arrowdown');
   }
+  if(direction)gamepadKeys.add(direction);
 
-  gamepadBombWasPressed = bombPressed;
+  // East face button = B / ○; south face button = A / × (also Nintendo B).
+  const bombPressed=pressed(1)||pressed(0);
+  if(bombPressed && !gamepadBombWasPressed)requestBomb();
+  gamepadBombWasPressed=bombPressed;
 }
 
 // キー/ゲームパッドからの設置要求。現在設置できなければ180msだけ予約する。
@@ -6695,6 +6707,8 @@ document.addEventListener("keyup", event => {
 // ウィンドウ外にフォーカスが移った場合も停止する
 window.addEventListener("blur", () => {
   heldKeys.clear();
+  gamepadKeys.clear();
+  gamepadBombWasPressed=false;
 });
 
 
