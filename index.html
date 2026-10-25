@@ -242,7 +242,7 @@ const KING_CHARGE_POST_INVULN_MS = 1000;
 // The first flame hit removes the crown. The brief grace period prevents the
 // same 600ms flame from consuming both of King's two hit points.
 const KING_FIRST_HIT_GRACE_MS = 700;
-const KING_PHASE_TWO_MS = 30000;
+const KING_PHASE_TWO_MS = 15000;
 const KING_SECOND_PHASE_SPEED = 1.3;
 const KING_CROWN_FALL_MS = 900;
 const KING_CHARGE_HIT_FX_MS = 560;
@@ -6328,7 +6328,7 @@ function update(dt) {
       flame.cells.some(([x,y])=>x===enemy.x&&y===enemy.y))
       .map(flame=>flame.owner||'unknown')));
     if (activeAiMode==='kingheart' && enemy.hp!==1) {
-      // The first hit ONLY breaks the crown: the 30s shield starts immediately,
+      // The first hit ONLY breaks the crown: the 15s shield starts immediately,
       // before any additional flame/chain reaction can decrement HP again.
       enemy.hp=1;
       kingPhaseTwoUntil=matchClock+KING_PHASE_TWO_MS;
