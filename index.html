@@ -72,9 +72,6 @@ main { max-width:510px; margin:0 auto; }
 .bomb-button:active, .bomb-button.pressed { transform:translateY(4px); box-shadow:0 3px 0 #762137; }
 .settings { border:1px solid #283b50; background:#151f30; border-radius:12px; margin:28px 0 10px; padding:13px; }
 .actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; }
-#fullscreen-help[hidden] { display:none; }
-#fullscreen-help { color:#cfe1f1; font-size:12px; line-height:1.6; margin:9px 0 0; }
-#fullscreen { min-width:88px; }
 #restart { min-width:140px; min-height:43px; }
 #gamepad-status[hidden] { display:none !important; }
 #gamepad-status { margin:10px 1px 0; color:#a9e6ba; font-size:12px; line-height:1.3; font-weight:700; }
@@ -129,11 +126,9 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
       </div>
       <section class="settings">
         <div class="actions">
-          <button id="fullscreen" type="button">全画面</button>
-          <button id="restart" type="button">再戦</button>
+          <button id="restart" type="button">再戦 (L1)</button>
         </div>
         <p id="gamepad-status" role="status" hidden>🎮 コントローラー接続中</p>
-        <p id="fullscreen-help" hidden role="status">iPhoneのSafariでは、共有メニュー →「ホーム画面に追加」→「Webアプリとして開く」を有効にして追加し、ホーム画面のアイコンから起動するとアドレスバーなしで遊べます。</p>
       </section>
     </div>
   </div>
@@ -215,13 +210,14 @@ const V18_EDGE_RELAY_LATE_MS = 400;
 
 const gamepadKeys = new Set();
 let gamepadBombWasPressed = false;
+let gamepadL1WasPressed = false;
 const gamepadStatus = document.getElementById('gamepad-status');
 let gamepadIsConnected = false;
 function markGamepadConnection(connected){
   if(connected === gamepadIsConnected)return;
   gamepadIsConnected = connected;
   if(gamepadStatus)gamepadStatus.hidden = !connected;
-  if(!connected){gamepadKeys.clear();gamepadBombWasPressed=false;}
+  if(!connected){gamepadKeys.clear();gamepadBombWasPressed=false;gamepadL1WasPressed=false;}
 }
 // iOS Safari exposes paired Bluetooth pads after a physical button/axis input.
 window.addEventListener('gamepadconnected',()=>markGamepadConnection(true));
@@ -597,6 +593,16 @@ function updateGamepad() {
       : (axisY<0?'arrowup':'arrowdown');
   }
   if(direction)gamepadKeys.add(direction);
+
+  // Standard Gamepad API index 4: L1 / LB / left shoulder.
+  // Restart only on a fresh press; holding L1 never loops restarts.
+  const l1Pressed = pressed(4);
+  const restartPressed = l1Pressed && !gamepadL1WasPressed;
+  gamepadL1WasPressed = l1Pressed;
+  if(restartPressed){
+    resetGame();
+    return true;
+  }
 
   // East face button = B / ○; south face button = A / × (also Nintendo B).
   const bombPressed=pressed(1)||pressed(0);
@@ -6245,7 +6251,8 @@ function update(dt) {
       if(effects[i].remaining<=0) effects.splice(i,1);
     }
   }
-  if (gameOver) return;
+  // Keep polling L1 after a result so the controller can start the next match.
+  if (gameOver) { updateGamepad(); return; }
   matchClock += dt;
   if (kingPhaseTwoUntil > 0 && matchClock >= kingPhaseTwoUntil) {
     kingPhaseTwoUntil=0;
@@ -6259,7 +6266,7 @@ function update(dt) {
   bombCooldown = Math.max(0, bombCooldown - dt);
 
   // 押している方向へ連続移動
-  updateGamepad();
+  if(updateGamepad()) return;
   playerMoveTimer -= dt;
 
   if (playerMoveTimer <= 0) {
@@ -6748,8 +6755,6 @@ requestAnimationFrame(loop);
   'use strict';
   const pad = document.getElementById('dpad');
   const bomb = document.getElementById('bomb-button');
-  const fullscreenButton = document.getElementById('fullscreen');
-  const fullscreenHelp = document.getElementById('fullscreen-help');
   const directionKeys = ['arrowup','arrowdown','arrowleft','arrowright'];
   let padPointer = null;
   let bombPointer = null;
@@ -6871,30 +6876,6 @@ requestAnimationFrame(loop);
     },{passive:false});
   }
 
-  // Safari on iPhone does not permit arbitrary pages to hide browser chrome;
-  // launching from an iOS Home Screen web-app icon uses standalone display mode.
-  const standalone=()=>window.navigator.standalone===true ||
-    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-  if(standalone())fullscreenButton.hidden=true;
-  function refreshFullscreenText(){
-    fullscreenButton.textContent=document.fullscreenElement?'全画面解除':'全画面';
-  }
-  document.addEventListener('fullscreenchange',refreshFullscreenText);
-  fullscreenButton.addEventListener('click',async()=>{
-    if(document.fullscreenElement){
-      try{await document.exitFullscreen();}catch(_){ }
-      return;
-    }
-    const root=document.documentElement;
-    if(typeof root.requestFullscreen==='function'){
-      try{
-        await root.requestFullscreen({navigationUI:'hide'});
-        fullscreenHelp.hidden=true;
-        return;
-      }catch(_){ /* iPhone browsers may reject the request. */ }
-    }
-    fullscreenHelp.hidden=false;
-  });
   function releaseAll() {
     releasePad();
     bombPointer=null;
