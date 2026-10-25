@@ -26,23 +26,33 @@ main { max-width:510px; margin:0 auto; }
   color:#fff; font:inherit; font-size:14px; font-weight:750; padding:8px 22px 8px 9px;
   touch-action:manipulation; -webkit-user-select:auto; user-select:auto; }
 .brand .ai-mode-picker select:focus-visible { outline:2px solid #7ccfff; outline-offset:2px; }
-.board { border:1px solid #53667a; border-radius:12px; background:#29483d; overflow:hidden; line-height:0; touch-action:none; }
+.board { position:relative; border:1px solid #53667a; border-radius:12px; background:#29483d; overflow:hidden; line-height:0; touch-action:none; }
 #game { display:block; width:100%; height:auto; aspect-ratio:15/13; touch-action:none; }
+/* A single non-selectable result overlay, visible only after a match. */
+#result-mark[hidden] { display:none !important; }
+#result-mark:not([hidden]) { position:absolute; inset:0; display:grid; place-items:center;
+  background:rgba(4,12,25,.72); color:#fff; pointer-events:none; z-index:3;
+  font-size:clamp(46px,14vw,84px); font-weight:950; line-height:1;
+  letter-spacing:.055em; text-shadow:0 4px 16px rgba(0,0,0,.8);
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+#result-mark[data-result="win"] { color:#88e4ff; }
+#result-mark[data-result="lose"] { color:#ff929e; }
+#result-mark[data-result="draw"] { color:#ffe4a3; }
 /* Keep the internal status node for game logic; do not show selectable text above the touch controls. */
 #message { display:none !important; }
 /* 入力エリアは常に固定位置。指を置いた後、中心からの相対方向で移動する。 */
-.controls { display:flex; align-items:center; justify-content:space-between; gap:32px; min-height:184px; padding:9px 8px 8px; touch-action:pan-x pan-y; }
-.joystick { flex:none; width:158px; height:158px; border-radius:50%; border:2px solid #4f6c88;
+.controls { display:flex; align-items:center; justify-content:space-between; gap:30px; min-height:160px; padding:8px 8px 7px; touch-action:pan-x pan-y; }
+.joystick { flex:none; width:140px; height:140px; border-radius:50%; border:2px solid #4f6c88;
  background:radial-gradient(circle at 50% 50%,#263e55 0%,#17293b 72%); position:relative; touch-action:none; cursor:pointer; }
 .joystick::before, .joystick::after { content:""; position:absolute; background:#6c8aa4; opacity:.45; border-radius:2px; pointer-events:none; }
 .joystick::before { left:calc(50% - 1px); top:15px; bottom:15px; width:2px; }
 .joystick::after { top:calc(50% - 1px); left:15px; right:15px; height:2px; }
-.stick-thumb { position:absolute; z-index:2; left:50%; top:50%; width:66px; height:66px; margin:-33px 0 0 -33px;
+.stick-thumb { position:absolute; z-index:2; left:50%; top:50%; width:58px; height:58px; margin:-29px 0 0 -29px;
  border-radius:50%; border:2px solid #a7c5e4; background:linear-gradient(145deg,#527aa3,#2d526f);
  box-shadow:0 5px 10px #0715229c; transform:translate(0,0); pointer-events:none; transition:transform 40ms linear; }
-.stick-thumb::before { content:""; position:absolute; inset:20px; border-radius:50%; background:#accde7; opacity:.6; }
-.bomb-button { flex:none; width:110px; height:110px; border-radius:50%; border:3px solid #ffb3a3;
- background:radial-gradient(circle at 32% 25%,#ff8c78,#c9344e 80%); color:white; font-size:19px; font-weight:850;
+.stick-thumb::before { content:""; position:absolute; inset:17px; border-radius:50%; background:#accde7; opacity:.6; }
+.bomb-button { flex:none; width:96px; height:96px; border-radius:50%; border:3px solid #ffb3a3;
+ background:radial-gradient(circle at 32% 25%,#ff8c78,#c9344e 80%); color:white; font-size:17px; font-weight:850;
  text-shadow:0 1px 3px #661625; box-shadow:0 7px 0 #762137, 0 10px 20px #040a15ad;
  touch-action:none; cursor:pointer; }
 .bomb-button:active, .bomb-button.pressed { transform:translateY(4px); box-shadow:0 3px 0 #762137; }
@@ -51,7 +61,7 @@ main { max-width:510px; margin:0 auto; }
 #restart { min-width:140px; min-height:43px; }
 button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; background:#28527b; color:#fff;
  border:1px solid #507fac; border-radius:9px; padding:10px 8px; min-height:42px; text-decoration:none; text-align:center; }
-@media (max-width:365px) { .joystick{width:138px;height:138px} .controls{min-height:160px;gap:24px} .bomb-button{width:94px;height:94px;font-size:17px}
+@media (max-width:365px) { .joystick{width:124px;height:124px} .controls{min-height:142px;gap:24px} .bomb-button{width:84px;height:84px;font-size:15px}
   .brand .name{font-size:18px} .brand .ai-mode-picker{gap:5px} .brand .ai-mode-picker select{width:105px} }
 @media (orientation:landscape) and (max-height:530px) {
   main { max-width:none; width:100%; }
@@ -60,10 +70,10 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
   .landscape-layout { display:grid; grid-template-columns:minmax(0,calc((100dvh - 46px)*15/13)) minmax(230px,1fr); gap:16px; justify-content:center; align-items:start; }
   .game-column { max-width:calc((100dvh - 46px)*15/13); }
   .controls-column { min-width:0; }
-  .controls { padding:3px 0; min-height:135px; gap:16px; justify-content:space-around; }
-  .joystick { width:126px; height:126px; }
-  .stick-thumb { width:56px;height:56px;margin:-28px 0 0 -28px; }
-  .bomb-button { width:88px;height:88px; font-size:16px; }
+  .controls { padding:3px 0; min-height:120px; gap:16px; justify-content:space-around; }
+  .joystick { width:112px; height:112px; }
+  .stick-thumb { width:48px;height:48px;margin:-24px 0 0 -24px; }
+  .bomb-button { width:78px;height:78px; font-size:15px; }
   .settings { margin-top:10px; }
 }
 
@@ -84,7 +94,7 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
   <div class="brand"><span class="name">v18-LG5</span><label class="ai-mode-picker" for="ai-opponent-select"><span>AI</span><select id="ai-opponent-select" aria-label="対戦するAI"><option value="lane">CP</option><option value="ec">EC</option><option value="stealth">Stealth</option><option value="warp">Warp</option></select></label></div>
   <div class="landscape-layout">
     <div class="game-column">
-      <div class="board"><canvas id="game" width="480" height="416" aria-label="v18-LG5 ゲーム盤面"></canvas></div>
+      <div class="board"><canvas id="game" width="480" height="416" aria-label="v18-LG5 ゲーム盤面"></canvas><div id="result-mark" hidden aria-hidden="true"></div></div>
       <div id="message" hidden aria-hidden="true"></div>
         </div>
     <div class="controls-column">
@@ -212,6 +222,20 @@ let nextBombId = 0;
 // EC attack logic needs the latest two real player movements, not a replay log.
 let recentPlayerMoves = [];
 
+function setResultMark(result) {
+  const mark = document.getElementById('result-mark');
+  if (!mark) return;
+  if (!result) {
+    mark.hidden = true;
+    mark.textContent = '';
+    mark.removeAttribute('data-result');
+    return;
+  }
+  mark.dataset.result = result;
+  mark.textContent = result.toUpperCase();
+  mark.hidden = false;
+}
+
 function resetGame() {
   map = Array.from({ length: ROWS }, (_, y) =>
   Array.from({ length: COLS }, (_, x) => {
@@ -267,6 +291,7 @@ function resetGame() {
   bombs = [];
   flames = [];
   gameOver = false;
+  setResultMark(null);
   bombCooldown = 0;
   bombInputBufferMs = 0;
   // リスタート時は補間状態を破棄し、初期位置から描画する。
@@ -5992,12 +6017,15 @@ function update(dt) {
   if (!player.alive && !enemy.alive) {
     message.textContent = "引き分け！ 再戦でもう一度";
     gameOver = true;
+    setResultMark('draw');
   } else if (!player.alive) {
     message.textContent = "敗北！ 再戦でもう一度";
     gameOver = true;
+    setResultMark('lose');
   } else if (!enemy.alive) {
     message.textContent = "勝利！ 再戦でもう一度";
     gameOver = true;
+    setResultMark('win');
   }
 }
 
