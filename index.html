@@ -48,6 +48,18 @@ main { max-width:510px; margin:0 auto; }
 .dpad .dpad-key { display:grid; place-items:center; min-width:0; min-height:0; width:100%; height:100%; padding:0; border:2px solid #8badcf; border-radius:11px;
   font-size:22px; font-weight:950; color:#e1f4ff; background:linear-gradient(155deg,#426e94,#193851); box-shadow:0 4px 0 #091826; touch-action:none; cursor:pointer; }
 .dpad .dpad-key.pressed { background:linear-gradient(155deg,#79b0df,#2c648e); transform:translateY(3px); box-shadow:0 1px 0 #091826; border-color:#c5e8ff; }
+/* Draw directional icons as shapes (not text) to avoid Safari's selection loupe. */
+.dpad .dpad-key::before { content:""; width:20px; height:20px; display:block;
+  background:currentColor; clip-path:polygon(50% 7%,94% 87%,6% 87%); pointer-events:none; }
+.dpad-left::before { transform:rotate(-90deg); }
+.dpad-right::before { transform:rotate(90deg); }
+.dpad-down::before { transform:rotate(180deg); }
+@media (max-width:365px) { .dpad .dpad-key::before { width:17px; height:17px; } }
+@media (orientation:landscape) and (max-height:530px) { .dpad .dpad-key::before { width:17px; height:17px; } }
+.controls, .controls *, .board, #game { -webkit-user-select:none !important; user-select:none !important;
+  -webkit-touch-callout:none !important; -webkit-tap-highlight-color:transparent; }
+.controls { touch-action:none; }
+.dpad .dpad-key, .bomb-button { touch-action:none; -webkit-touch-callout:none; }
 .dpad-up { grid-area:1/2; }
 .dpad-left { grid-area:2/1; }
 .dpad-right { grid-area:2/3; }
@@ -105,11 +117,11 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
     <div class="controls-column">
       <div class="controls" aria-label="タッチ操作">
         <div id="dpad" class="dpad" role="group" aria-label="十字キー・押し続けて移動">
-          <button type="button" class="dpad-key dpad-up" data-direction="arrowup" aria-label="上へ移動">▲</button>
-          <button type="button" class="dpad-key dpad-left" data-direction="arrowleft" aria-label="左へ移動">◀</button>
+          <button type="button" class="dpad-key dpad-up" data-direction="arrowup" aria-label="上へ移動"></button>
+          <button type="button" class="dpad-key dpad-left" data-direction="arrowleft" aria-label="左へ移動"></button>
           <span class="dpad-center" aria-hidden="true"></span>
-          <button type="button" class="dpad-key dpad-right" data-direction="arrowright" aria-label="右へ移動">▶</button>
-          <button type="button" class="dpad-key dpad-down" data-direction="arrowdown" aria-label="下へ移動">▼</button>
+          <button type="button" class="dpad-key dpad-right" data-direction="arrowright" aria-label="右へ移動"></button>
+          <button type="button" class="dpad-key dpad-down" data-direction="arrowdown" aria-label="下へ移動"></button>
         </div>
         <button type="button" id="bomb-button" class="bomb-button" aria-label="爆弾を設置">BOMB</button>
       </div>
@@ -6727,6 +6739,8 @@ requestAnimationFrame(loop);
   const directionKeys = ['arrowup','arrowdown','arrowleft','arrowright'];
   let padPointer = null;
   let bombPointer = null;
+  let padTouchId = null;
+  let bombTouchId = null;
   let currentDirection = '';
 
   function setDirection(next) {
@@ -6736,22 +6750,55 @@ requestAnimationFrame(loop);
     if(next)heldKeys.add(next);
     for(const key of pad.querySelectorAll('.dpad-key'))
       key.classList.toggle('pressed',key.dataset.direction===next);
-    // The game itself remains responsible for the original 120ms movement cadence.
+    // Preserve the game's original movement cadence.
   }
   function releasePad() {
     padPointer=null;
+    padTouchId=null;
     touchStickAxes=null;touchTurnLock=null;touchTurnLockReference=null;
     setDirection('');
   }
-  // Opponent switching and restarting can release active touch movement.
   window.releaseStick=releasePad;
   function directionAt(x,y) {
     const el=document.elementFromPoint(x,y);
     const key=el && el.closest ? el.closest('.dpad-key') : null;
     return key && pad.contains(key) ? key.dataset.direction : '';
   }
-  pad.addEventListener('pointerdown', event => {
-    if(padPointer!==null)return;
+  function findChangedTouch(event,id) {
+    for(const touch of event.changedTouches) if(touch.identifier===id)return touch;
+    return null;
+  }
+
+  // iOS Safari can show a text magnifier even with user-select:none.
+  // Use non-passive touch handling to suppress native long-press gestures
+  // only in the game controls, while still handling held/moving fingers.
+  const controls=document.querySelector('.controls');
+  for(const type of ['touchstart','touchmove','touchend','touchcancel']) {
+    controls.addEventListener(type,event=>event.preventDefault(),{passive:false,capture:true});
+  }
+  pad.addEventListener('touchstart',event=>{
+    if(padTouchId!==null)return;
+    const key=event.target.closest('.dpad-key');
+    if(!key)return;
+    const touch=event.changedTouches[0];
+    if(!touch)return;
+    padTouchId=touch.identifier;
+    setDirection(key.dataset.direction);
+  },{passive:false});
+  pad.addEventListener('touchmove',event=>{
+    if(padTouchId===null)return;
+    const touch=findChangedTouch(event,padTouchId);
+    if(touch)setDirection(directionAt(touch.clientX,touch.clientY));
+  },{passive:false});
+  function endPadTouch(event){
+    if(padTouchId!==null && findChangedTouch(event,padTouchId))releasePad();
+  }
+  pad.addEventListener('touchend',endPadTouch,{passive:false});
+  pad.addEventListener('touchcancel',endPadTouch,{passive:false});
+
+  // Retain pointer controls for mouse/pen on desktop; touch is handled above.
+  pad.addEventListener('pointerdown',event=>{
+    if(event.pointerType==='touch'||padPointer!==null)return;
     const key=event.target.closest('.dpad-key');
     if(!key)return;
     event.preventDefault();
@@ -6759,36 +6806,56 @@ requestAnimationFrame(loop);
     try{pad.setPointerCapture(event.pointerId);}catch(_){}
     setDirection(key.dataset.direction);
   });
-  pad.addEventListener('pointermove', event => {
-    if(padPointer!==event.pointerId)return;
+  pad.addEventListener('pointermove',event=>{
+    if(event.pointerType==='touch'||padPointer!==event.pointerId)return;
     event.preventDefault();
-    const next=directionAt(event.clientX,event.clientY);
-    // Sliding between directions works; leaving the pad releases movement.
-    setDirection(next);
+    setDirection(directionAt(event.clientX,event.clientY));
   });
-  function endPad(event){if(padPointer===event.pointerId)releasePad();}
-  pad.addEventListener('pointerup',endPad);
-  pad.addEventListener('pointercancel',endPad);
-  pad.addEventListener('lostpointercapture',endPad);
-  pad.addEventListener('click',event => event.preventDefault());
+  function endPadPointer(event){
+    if(event.pointerType!=='touch'&&padPointer===event.pointerId)releasePad();
+  }
+  pad.addEventListener('pointerup',endPadPointer);
+  pad.addEventListener('pointercancel',endPadPointer);
+  pad.addEventListener('lostpointercapture',endPadPointer);
+  pad.addEventListener('click',event=>event.preventDefault());
 
-  bomb.addEventListener('pointerdown', event => {
-    if(bombPointer!==null)return;
+  bomb.addEventListener('touchstart',event=>{
+    if(bombTouchId!==null)return;
+    const touch=event.changedTouches[0];
+    if(!touch)return;
+    bombTouchId=touch.identifier;
+    bomb.classList.add('pressed');
+    requestBomb();
+  },{passive:false});
+  function endBombTouch(event){
+    if(bombTouchId===null||!findChangedTouch(event,bombTouchId))return;
+    bombTouchId=null;
+    bomb.classList.remove('pressed');
+  }
+  bomb.addEventListener('touchend',endBombTouch,{passive:false});
+  bomb.addEventListener('touchcancel',endBombTouch,{passive:false});
+  bomb.addEventListener('pointerdown',event=>{
+    if(event.pointerType==='touch'||bombPointer!==null)return;
     event.preventDefault();
     bombPointer=event.pointerId;
     bomb.classList.add('pressed');
     try{bomb.setPointerCapture(event.pointerId);}catch(_){}
     requestBomb();
   });
-  function releaseBomb(event) {
-    if(bombPointer!==event.pointerId)return;
+  function endBombPointer(event){
+    if(event.pointerType==='touch'||bombPointer!==event.pointerId)return;
     bombPointer=null;
     bomb.classList.remove('pressed');
   }
-  bomb.addEventListener('pointerup',releaseBomb);
-  bomb.addEventListener('pointercancel',releaseBomb);
-  bomb.addEventListener('lostpointercapture',releaseBomb);
-  bomb.addEventListener('click',event => event.preventDefault());
+  bomb.addEventListener('pointerup',endBombPointer);
+  bomb.addEventListener('pointercancel',endBombPointer);
+  bomb.addEventListener('lostpointercapture',endBombPointer);
+  bomb.addEventListener('click',event=>event.preventDefault());
+  for(const type of ['selectstart','dragstart','dblclick','contextmenu','gesturestart','gesturechange']) {
+    document.addEventListener(type,event=>{
+      if(event.target.closest && event.target.closest('.controls'))event.preventDefault();
+    },{passive:false});
+  }
 
   // Safari on iPhone does not permit arbitrary pages to hide browser chrome;
   // launching from an iOS Home Screen web-app icon uses standalone display mode.
@@ -6817,6 +6884,7 @@ requestAnimationFrame(loop);
   function releaseAll() {
     releasePad();
     bombPointer=null;
+    bombTouchId=null;
     bomb.classList.remove('pressed');
   }
   window.addEventListener('blur',releaseAll);
