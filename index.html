@@ -12,7 +12,7 @@
   background:#0d1320; color:#edf4ff; -webkit-text-size-adjust:100%; }
 * { box-sizing:border-box; }
 html { min-height:100%; overscroll-behavior:none; }
-body { margin:0; min-height:100dvh; padding: max(9px,env(safe-area-inset-top)) max(9px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(9px,env(safe-area-inset-left)); }
+body { margin:0; min-height:100dvh; padding: max(9px,env(safe-area-inset-top)) max(9px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(9px,env(safe-area-inset-left)); -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
 body, button, .joystick, .bomb-button, canvas { -webkit-tap-highlight-color:transparent; }
 button, .joystick, .bomb-button, .board { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
 main { max-width:510px; margin:0 auto; }
@@ -28,7 +28,8 @@ main { max-width:510px; margin:0 auto; }
 .brand .ai-mode-picker select:focus-visible { outline:2px solid #7ccfff; outline-offset:2px; }
 .board { border:1px solid #53667a; border-radius:12px; background:#29483d; overflow:hidden; line-height:0; touch-action:none; }
 #game { display:block; width:100%; height:auto; aspect-ratio:15/13; touch-action:none; }
-#message { text-align:center; font-size:15px; font-weight:800; min-height:24px; margin:9px 0 2px; }
+/* Keep the internal status node for game logic; do not show selectable text above the touch controls. */
+#message { display:none !important; }
 /* 入力エリアは常に固定位置。指を置いた後、中心からの相対方向で移動する。 */
 .controls { display:flex; align-items:center; justify-content:space-between; gap:32px; min-height:184px; padding:9px 8px 8px; touch-action:pan-x pan-y; }
 .joystick { flex:none; width:158px; height:158px; border-radius:50%; border:2px solid #4f6c88;
@@ -64,7 +65,6 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
   .stick-thumb { width:56px;height:56px;margin:-28px 0 0 -28px; }
   .bomb-button { width:88px;height:88px; font-size:16px; }
   .settings { margin-top:10px; }
-  #message { font-size:12px; margin:4px 0 1px; }
 }
 
 /* iPhone-first controls, still playable on desktop with the same file. */
@@ -76,7 +76,6 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
   .game-column { min-width:0; }
   .controls { gap:14px; }
   .settings { margin-top:16px; }
-  #message { text-align:left; }
 }
 </style>
 </head>
@@ -86,7 +85,7 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
   <div class="landscape-layout">
     <div class="game-column">
       <div class="board"><canvas id="game" width="480" height="416" aria-label="v18-LG5 ゲーム盤面"></canvas></div>
-      <div id="message" role="status" aria-live="polite">対戦を開始します</div>
+      <div id="message" hidden aria-hidden="true"></div>
         </div>
     <div class="controls-column">
       <div class="controls" aria-label="タッチ操作">
