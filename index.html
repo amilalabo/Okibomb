@@ -43,28 +43,34 @@ main { max-width:510px; margin:0 auto; }
 /* Keep the internal status node for game logic; do not show selectable text above the touch controls. */
 #message { display:none !important; }
 /* Fixed D-pad: discrete four-way keys, continuous movement while pressed. */
-.controls { display:flex; align-items:center; justify-content:space-between; gap:30px; min-height:166px; padding:7px 8px; touch-action:none; }
-.dpad { flex:none; width:150px; height:150px; display:grid; grid-template:repeat(3,1fr)/repeat(3,1fr); gap:3px; touch-action:none; -webkit-user-select:none; user-select:none; }
-.dpad .dpad-key { display:grid; place-items:center; min-width:0; min-height:0; width:100%; height:100%; padding:0; border:2px solid #8badcf; border-radius:11px;
-  font-size:22px; font-weight:950; color:#e1f4ff; background:linear-gradient(155deg,#426e94,#193851); box-shadow:0 4px 0 #091826; touch-action:none; cursor:pointer; }
-.dpad .dpad-key.pressed { background:linear-gradient(155deg,#79b0df,#2c648e); transform:translateY(3px); box-shadow:0 1px 0 #091826; border-color:#c5e8ff; }
-/* Draw directional icons as shapes (not text) to avoid Safari's selection loupe. */
-.dpad .dpad-key::before { content:""; width:20px; height:20px; display:block;
-  background:currentColor; clip-path:polygon(50% 7%,94% 87%,6% 87%); pointer-events:none; }
-.dpad-left::before { transform:rotate(-90deg); }
-.dpad-right::before { transform:rotate(90deg); }
-.dpad-down::before { transform:rotate(180deg); }
-@media (max-width:365px) { .dpad .dpad-key::before { width:17px; height:17px; } }
-@media (orientation:landscape) and (max-height:530px) { .dpad .dpad-key::before { width:17px; height:17px; } }
+.controls { display:flex; align-items:center; justify-content:space-between; gap:28px; min-height:188px; padding:8px 8px; touch-action:none; }
+/* Four separate pointed arms, matching the user's sketch.
+   Explicit selectors also prevent the original generic clip-path:none override. */
+.dpad { flex:none; width:176px; height:176px; position:relative;
+  touch-action:none; -webkit-user-select:none; user-select:none; }
+.dpad .dpad-key { display:block; position:absolute; min-width:0; min-height:0;
+  margin:0; padding:0; border:2px solid #8badcf; border-radius:0;
+  background:linear-gradient(155deg,#426e94,#193851); color:#e1f4ff;
+  cursor:pointer; touch-action:none; -webkit-touch-callout:none;
+  -webkit-user-select:none; user-select:none;
+  -webkit-tap-highlight-color:transparent; }
+.dpad .dpad-key.pressed { background:linear-gradient(155deg,#79b0df,#2c648e); border-color:#c5e8ff; }
+.dpad .dpad-up { left:33%; top:0; width:34%; height:46%;
+  -webkit-clip-path:polygon(2% 1%,98% 1%,98% 59%,50% 100%,2% 59%);
+  clip-path:polygon(2% 1%,98% 1%,98% 59%,50% 100%,2% 59%); }
+.dpad .dpad-left { left:0; top:33%; width:46%; height:34%;
+  -webkit-clip-path:polygon(1% 2%,59% 2%,100% 50%,59% 98%,1% 98%);
+  clip-path:polygon(1% 2%,59% 2%,100% 50%,59% 98%,1% 98%); }
+.dpad .dpad-right { right:0; top:33%; width:46%; height:34%;
+  -webkit-clip-path:polygon(41% 2%,99% 2%,99% 98%,41% 98%,0 50%);
+  clip-path:polygon(41% 2%,99% 2%,99% 98%,41% 98%,0 50%); }
+.dpad .dpad-down { left:33%; bottom:0; width:34%; height:46%;
+  -webkit-clip-path:polygon(50% 0,98% 41%,98% 99%,2% 99%,2% 41%);
+  clip-path:polygon(50% 0,98% 41%,98% 99%,2% 99%,2% 41%); }
 .controls, .controls *, .board, #game { -webkit-user-select:none !important; user-select:none !important;
   -webkit-touch-callout:none !important; -webkit-tap-highlight-color:transparent; }
 .controls { touch-action:none; }
 .dpad .dpad-key, .bomb-button { touch-action:none; -webkit-touch-callout:none; }
-.dpad-up { grid-area:1/2; }
-.dpad-left { grid-area:2/1; }
-.dpad-right { grid-area:2/3; }
-.dpad-down { grid-area:3/2; }
-.dpad-center { grid-area:2/2; align-self:center; justify-self:center; width:76%; height:76%; border-radius:50%; border:2px solid #5c83a4; background:#203d57; box-shadow:inset 0 0 9px #0b2033; pointer-events:none; }
 .bomb-button { flex:none; width:96px; height:96px; border-radius:50%; border:3px solid #ffb3a3;
  background:radial-gradient(circle at 32% 25%,#ff8c78,#c9344e 80%); color:white; font-size:17px; font-weight:850;
  text-shadow:0 1px 3px #661625; box-shadow:0 7px 0 #762137, 0 10px 20px #040a15ad;
@@ -77,7 +83,7 @@ main { max-width:510px; margin:0 auto; }
 #gamepad-status { margin:10px 1px 0; color:#a9e6ba; font-size:12px; line-height:1.3; font-weight:700; }
 button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; background:#28527b; color:#fff;
  border:1px solid #507fac; border-radius:9px; padding:10px 8px; min-height:42px; text-decoration:none; text-align:center; }
-@media (max-width:365px) { .dpad{width:129px;height:129px;gap:2px} .dpad .dpad-key{font-size:18px;border-radius:8px} .controls{min-height:145px;gap:24px} .bomb-button{width:84px;height:84px;font-size:15px}
+@media (max-width:365px) { .dpad{width:146px;height:146px} .dpad .dpad-key{border-radius:0} .controls{min-height:160px;gap:18px} .bomb-button{width:84px;height:84px;font-size:15px}
   .brand .name{font-size:18px} .brand .ai-mode-picker{gap:5px} .brand .ai-mode-picker select{width:110px} }
 @media (orientation:landscape) and (max-height:530px) {
   main { max-width:none; width:100%; }
@@ -86,10 +92,10 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
   .landscape-layout { display:grid; grid-template-columns:minmax(0,calc((100dvh - 70px)*15/13)) minmax(230px,1fr); gap:16px; justify-content:center; align-items:start; }
   .game-column { max-width:calc((100dvh - 70px)*15/13); }
   .controls-column { min-width:0; }
-  .controls { padding:3px 0; min-height:120px; gap:16px; justify-content:space-around; }
-  .dpad { width:123px; height:123px; gap:2px; }
-  .dpad .dpad-key { font-size:18px; border-radius:8px; }
-  .bomb-button { width:78px;height:78px; font-size:15px; }
+  .controls { padding:3px 0; min-height:132px; gap:12px; justify-content:space-around; }
+  .dpad { width:138px; height:138px; }
+  .dpad .dpad-key { border-radius:0; }
+  .bomb-button { width:80px;height:80px; font-size:15px; }
   .settings { margin-top:10px; }
 }
 
@@ -100,7 +106,7 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
   .brand .name { font-size:24px; }
   .landscape-layout { display:grid;grid-template-columns:minmax(0,520px) minmax(320px,1fr);gap:22px;align-items:start; }
   .game-column { min-width:0; }
-  .controls { gap:14px; }
+  .controls { gap:12px; }
   .settings { margin-top:16px; }
 }
 </style>
@@ -118,7 +124,6 @@ button:not(.bomb-button) { font:inherit; font-size:12px; font-weight:750; backgr
         <div id="dpad" class="dpad" role="group" aria-label="十字キー・押し続けて移動">
           <button type="button" class="dpad-key dpad-up" data-direction="arrowup" aria-label="上へ移動"></button>
           <button type="button" class="dpad-key dpad-left" data-direction="arrowleft" aria-label="左へ移動"></button>
-          <span class="dpad-center" aria-hidden="true"></span>
           <button type="button" class="dpad-key dpad-right" data-direction="arrowright" aria-label="右へ移動"></button>
           <button type="button" class="dpad-key dpad-down" data-direction="arrowdown" aria-label="下へ移動"></button>
         </div>
