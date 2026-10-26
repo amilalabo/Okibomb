@@ -6761,11 +6761,14 @@ requestAnimationFrame(loop);
   const pad = document.getElementById('dpad');
   const bomb = document.getElementById('bomb-button');
   const directionKeys = ['arrowup','arrowdown','arrowleft','arrowright'];
-  let padPointer = null;
   let bombPointer = null;
-  let padTouchId = null;
   let bombTouchId = null;
   let currentDirection = '';
+  // A touch on a different direction becomes the active direction immediately.
+  // Keep all fingers separately so releasing the newer one restores the older.
+  const padTouches = new Map();
+  const padPointers = new Map();
+  let pressSequence = 0;
 
   function setDirection(next) {
     if(currentDirection === next)return;
@@ -6774,11 +6777,18 @@ requestAnimationFrame(loop);
     if(next)heldKeys.add(next);
     for(const key of pad.querySelectorAll('.dpad-key'))
       key.classList.toggle('pressed',key.dataset.direction===next);
-    // Preserve the game's original movement cadence.
+    // Do not reset the movement timer: same 120ms movement speed as before.
+  }
+  function updateActiveDirection() {
+    let latest=null;
+    for(const record of [...padTouches.values(), ...padPointers.values()]){
+      if(record.direction && (!latest || record.order>latest.order)) latest=record;
+    }
+    setDirection(latest ? latest.direction : '');
   }
   function releasePad() {
-    padPointer=null;
-    padTouchId=null;
+    padTouches.clear();
+    padPointers.clear();
     touchStickAxes=null;touchTurnLock=null;touchTurnLockReference=null;
     setDirection('');
   }
@@ -6788,55 +6798,69 @@ requestAnimationFrame(loop);
     const key=el && el.closest ? el.closest('.dpad-key') : null;
     return key && pad.contains(key) ? key.dataset.direction : '';
   }
+
   function findChangedTouch(event,id) {
     for(const touch of event.changedTouches) if(touch.identifier===id)return touch;
     return null;
   }
 
-  // iOS Safari can show a text magnifier even with user-select:none.
-  // Use non-passive touch handling to suppress native long-press gestures
-  // only in the game controls, while still handling held/moving fingers.
+  // Prevent the iPhone selection magnifier and browser gestures on controls.
   const controls=document.querySelector('.controls');
   for(const type of ['touchstart','touchmove','touchend','touchcancel']) {
     controls.addEventListener(type,event=>event.preventDefault(),{passive:false,capture:true});
   }
   pad.addEventListener('touchstart',event=>{
-    if(padTouchId!==null)return;
-    const key=event.target.closest('.dpad-key');
-    if(!key)return;
-    const touch=event.changedTouches[0];
-    if(!touch)return;
-    padTouchId=touch.identifier;
-    setDirection(key.dataset.direction);
+    for(const touch of event.changedTouches){
+      const direction=directionAt(touch.clientX,touch.clientY);
+      if(!direction)continue;
+      padTouches.set(touch.identifier,{direction,order:++pressSequence});
+    }
+    updateActiveDirection();
   },{passive:false});
   pad.addEventListener('touchmove',event=>{
-    if(padTouchId===null)return;
-    const touch=findChangedTouch(event,padTouchId);
-    if(touch)setDirection(directionAt(touch.clientX,touch.clientY));
+    for(const touch of event.changedTouches){
+      const record=padTouches.get(touch.identifier);
+      if(!record)continue;
+      const direction=directionAt(touch.clientX,touch.clientY);
+      if(direction!==record.direction){
+        record.direction=direction;
+        if(direction)record.order=++pressSequence;
+      }
+    }
+    updateActiveDirection();
   },{passive:false});
   function endPadTouch(event){
-    if(padTouchId!==null && findChangedTouch(event,padTouchId))releasePad();
+    for(const touch of event.changedTouches)padTouches.delete(touch.identifier);
+    updateActiveDirection();
   }
   pad.addEventListener('touchend',endPadTouch,{passive:false});
   pad.addEventListener('touchcancel',endPadTouch,{passive:false});
 
-  // Retain pointer controls for mouse/pen on desktop; touch is handled above.
+  // Desktop mouse and pen inputs use the same newest-press-wins logic.
   pad.addEventListener('pointerdown',event=>{
-    if(event.pointerType==='touch'||padPointer!==null)return;
-    const key=event.target.closest('.dpad-key');
-    if(!key)return;
+    if(event.pointerType==='touch')return;
+    const direction=directionAt(event.clientX,event.clientY);
+    if(!direction)return;
     event.preventDefault();
-    padPointer=event.pointerId;
+    padPointers.set(event.pointerId,{direction,order:++pressSequence});
     try{pad.setPointerCapture(event.pointerId);}catch(_){}
-    setDirection(key.dataset.direction);
+    updateActiveDirection();
   });
   pad.addEventListener('pointermove',event=>{
-    if(event.pointerType==='touch'||padPointer!==event.pointerId)return;
+    if(event.pointerType==='touch')return;
+    const record=padPointers.get(event.pointerId);
+    if(!record)return;
     event.preventDefault();
-    setDirection(directionAt(event.clientX,event.clientY));
+    const direction=directionAt(event.clientX,event.clientY);
+    if(record.direction!==direction){
+      record.direction=direction;
+      if(direction)record.order=++pressSequence;
+    }
+    updateActiveDirection();
   });
   function endPadPointer(event){
-    if(event.pointerType!=='touch'&&padPointer===event.pointerId)releasePad();
+    if(event.pointerType==='touch')return;
+    if(padPointers.delete(event.pointerId))updateActiveDirection();
   }
   pad.addEventListener('pointerup',endPadPointer);
   pad.addEventListener('pointercancel',endPadPointer);
