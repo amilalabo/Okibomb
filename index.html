@@ -194,6 +194,9 @@ const heldKeys = new Set();
 let touchStickAxes = null;
 let touchTurnLock = null;
 let touchTurnLockReference = null;
+// The on-screen D-pad's last-pressed direction; keyboard / gamepad controls
+// deliberately do not receive the automatic junction-turn assist.
+let touchDpadDirection = '';
 
 let playerMoveTimer = 0;
 // A directional turn can respond sooner, while straight-line steps retain the 120ms interval.
@@ -524,7 +527,9 @@ function getVisualPosition(visual, x, y, now = performance.now()) {
   if (!visual) return { x, y };
   const progress = Math.max(0, Math.min(1, (now - visual.startedAt) / visual.duration));
   // 加速・減速を少しつけ、次のマスへの移動とつながりやすくする。
-  const eased = progress * progress * (3 - 2 * progress);
+  // Constant-speed travel feels less stop/start than easing each 32px tile.
+  // Enemy animation remains unchanged; this only affects the human avatar.
+  const eased = visual === playerVisual ? progress : progress * progress * (3 - 2 * progress);
   return {
     x: visual.fromX + (visual.toX - visual.fromX) * eased,
     y: visual.fromY + (visual.toY - visual.fromY) * eased
@@ -543,6 +548,31 @@ function animateVisualPosition(visual, x, y, duration) {
   visual.startedAt = now;
   visual.duration = duration;
   return visual;
+}
+
+// At a corridor exit, a requested perpendicular turn may hit a grid wall
+// one tile before an intersection. Continue in the *actual* recent heading
+// until the requested turn becomes legal. Do not traverse blocked squares,
+// bombs, or change the direction order of the on-screen D-pad.
+const PLAYER_CORNER_LOOKAHEAD_STEPS = 2;
+const PLAYER_CORNER_HEADING_MEMORY_MS = 350;
+function plannedPlayerStep(dx,dy){
+  if(!dx && !dy) return null;
+  const requested={dx,dy,cornerLead:false};
+  if(canMove(player.x+dx,player.y+dy))return requested;
+  // Only assist touch-D-pad turns; preserve keyboard/gamepad input semantics.
+  const intendedKey=dx>0?'arrowright':dx<0?'arrowleft':dy>0?'arrowdown':'arrowup';
+  if(touchDpadDirection!==intendedKey)return requested;
+  const fx=playerDirX, fy=playerDirY;
+  if(!((dx!==0 && fy!==0 && fx===0) || (dy!==0 && fx!==0 && fy===0)))return requested;
+  if(matchClock-lastSuccessfulPlayerStepAt>PLAYER_CORNER_HEADING_MEMORY_MS)return requested;
+  // Accept only a nearby reachable junction, never chase a dead-end wall.
+  for(let distance=1;distance<=PLAYER_CORNER_LOOKAHEAD_STEPS;distance++){
+    const nx=player.x+fx*distance, ny=player.y+fy*distance;
+    if(!canMove(nx,ny))break;
+    if(canMove(nx+dx,ny+dy))return {dx:fx,dy:fy,cornerLead:true};
+  }
+  return requested;
 }
 
 function movePlayer(dx, dy) {
@@ -6294,9 +6324,16 @@ function update(dt) {
     else if (heldKeys.has("arrowright") || heldKeys.has("d") || gamepadKeys.has("arrowright")) dx = 1;
 
     if (dx !== 0 || dy !== 0) {
-      // A blocked step must never consume an entire movement interval.
-      // On a wall or bomb, the newly pressed perpendicular direction is ready immediately.
-      playerMoveTimer = movePlayer(dx, dy) ? PLAYER_MOVE_INTERVAL : 0;
+      const step=plannedPlayerStep(dx,dy);
+      if(movePlayer(step.dx,step.dy)) {
+        // On reaching the junction the queued turn can fire with the normal
+        // 65ms turn gap, rather than waiting a full 120ms extra.
+        const turnNowOpen=step.cornerLead && canMove(player.x+dx,player.y+dy);
+        playerMoveTimer=turnNowOpen ? PLAYER_TURN_MIN_GAP_MS : PLAYER_MOVE_INTERVAL;
+      } else {
+        // A blocked step must not consume an entire movement interval.
+        playerMoveTimer=0;
+      }
     } else {
       playerMoveTimer = 0;
     }
@@ -6783,6 +6820,7 @@ requestAnimationFrame(loop);
     if(currentDirection === next)return;
     for(const key of directionKeys)heldKeys.delete(key);
     currentDirection=next;
+    touchDpadDirection=next;
     if(next) {
       heldKeys.add(next);
       // Give a deliberate turn priority over the remainder of an old direction's
